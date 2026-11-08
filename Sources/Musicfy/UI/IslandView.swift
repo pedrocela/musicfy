@@ -131,7 +131,7 @@ struct IslandView: View {
     private var expandedContent: some View {
         VStack(spacing: 0) {
             if player.state == nil {
-                EmptyStateView(player: player)
+                EmptyStateView(player: player, backdrop: false)
                     .frame(maxHeight: .infinity)
             } else {
                 HStack(alignment: .top, spacing: 12) {

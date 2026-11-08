@@ -640,39 +640,238 @@ private struct SyncedLyrics: View, Equatable {
 
 // MARK: - Nothing playing and permissions
 
+/// What the player shows when neither app has a song loaded: a dark backdrop lit faintly
+/// by each installed app's color, an empty artwork, and a way into each app. It lays itself
+/// out for the space it gets: stacked in artwork, side by side in compact and the open
+/// Island, and just the empty artwork and the app glyphs in the mini artwork.
+/// Nothing in it animates while it sits there, so an idle player costs nothing.
 struct EmptyStateView: View {
     @ObservedObject var player: PlayerController
+    /// Its own backdrop; the Island already has one.
+    var backdrop = true
+    @State private var appeared = false
+
+    private enum Layout { case stacked, wide, mini }
 
     var body: some View {
-        VStack(spacing: 6) {
-            Image(systemName: "music.note")
-                .font(.system(size: 22, weight: .semibold))
-                .foregroundStyle(Theme.tertiary)
-            Text("Nothing Playing")
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(Theme.primary)
-            Text(SourceKind.allCases.contains(where: \.isRunning) ? "Play something in Music or Spotify." : "Music and Spotify are closed.")
-                .font(.system(size: 12))
-                .foregroundStyle(Theme.secondary)
-            HStack(spacing: 8) {
-                ForEach(player.installedSources) { kind in
-                    Button { player.open(kind) } label: {
-                        HStack(spacing: 6) {
-                            Circle().fill(Theme.sourceColor(kind)).frame(width: 6, height: 6)
-                            Text("Open \(kind.displayName)")
-                        }
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(Theme.primary)
-                        .padding(.horizontal, 12)
-                        .frame(height: 28)
-                        .background(Capsule().fill(Theme.roundButtonFill))
-                        .contentShape(Capsule())
-                    }
-                    .buttonStyle(PressableStyle())
+        GeometryReader { geo in
+            let layout = layout(for: geo.size)
+            ZStack {
+                if backdrop { EmptyBackdrop(sources: player.installedSources) }
+                switch layout {
+                case .stacked: stacked(side: min(geo.size.width, geo.size.height))
+                case .wide: wide
+                case .mini: mini(side: min(geo.size.width, geo.size.height))
                 }
             }
-            .padding(.top, 6)
+            .frame(width: geo.size.width, height: geo.size.height)
         }
+        .onAppear {
+            withAnimation(Theme.smooth.delay(0.05)) { appeared = true }
+        }
+    }
+
+    private func layout(for size: CGSize) -> Layout {
+        if size.width < 200 { return .mini }
+        return size.height >= 220 ? .stacked : .wide
+    }
+
+    // MARK: Layouts
+
+    private func stacked(side: CGFloat) -> some View {
+        let art = min(96, side * 0.28)
+        return VStack(spacing: 0) {
+            EmptyArtwork(side: art)
+                .scaleEffect(appeared ? 1 : 0.92)
+                .opacity(appeared ? 1 : 0)
+            VStack(spacing: 4) {
+                Text("Nothing Playing")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(Theme.primary)
+                Text(detail)
+                    .font(.system(size: 12))
+                    .foregroundStyle(Theme.secondary)
+                    .multilineTextAlignment(.center)
+            }
+            .padding(.top, 16)
+            buttons
+                .padding(.top, 16)
+        }
+        .padding(.horizontal, 20)
+        .offset(y: appeared ? 0 : 6)
+    }
+
+    private var wide: some View {
+        HStack(spacing: 16) {
+            EmptyArtwork(side: 72)
+                .scaleEffect(appeared ? 1 : 0.92)
+                .opacity(appeared ? 1 : 0)
+            VStack(alignment: .leading, spacing: 0) {
+                Text("Nothing Playing")
+                    .font(Theme.compactTitle)
+                    .foregroundStyle(Theme.primary)
+                Text(detail)
+                    .font(Theme.compactSubtitle)
+                    .foregroundStyle(Theme.secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
+                    .padding(.top, 2)
+                buttons
+                    .padding(.top, 10)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 16)
+        .offset(y: appeared ? 0 : 4)
+    }
+
+    private func mini(side: CGFloat) -> some View {
+        VStack(spacing: side * 0.08) {
+            EmptyArtwork(side: side * 0.4)
+            HStack(spacing: 6) {
+                ForEach(player.installedSources) { kind in
+                    SourceButton(kind: kind, compact: true) { player.open(kind) }
+                }
+            }
+        }
+        .opacity(appeared ? 1 : 0)
+    }
+
+    private var buttons: some View {
+        HStack(spacing: 8) {
+            ForEach(player.installedSources) { kind in
+                SourceButton(kind: kind, compact: false) { player.open(kind) }
+            }
+        }
+    }
+
+    private var detail: String {
+        let names = player.installedSources.map(\.displayName)
+        let list = names.count > 1 ? names.dropLast().joined(separator: ", ") + " or " + names.last! : names.first ?? "Music"
+        if player.installedSources.contains(where: \.isRunning) { return "Play something in \(list)." }
+        return names.count > 1 ? "\(names.joined(separator: " and ")) are closed." : "\(list) is closed."
+    }
+}
+
+/// Graphite, darker toward the bottom, with each installed app's color glowing faintly
+/// from a corner: Music's pink from the top left, Spotify's green from the bottom right.
+/// Opaque enough that a white desktop behind doesn't turn it gray.
+private struct EmptyBackdrop: View {
+    let sources: [SourceKind]
+
+    var body: some View {
+        ZStack {
+            LinearGradient(
+                colors: [Color(red: 0.15, green: 0.15, blue: 0.17), Color(red: 0.07, green: 0.07, blue: 0.08)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .opacity(0.94)
+            GeometryReader { geo in
+                let reach = max(geo.size.width, geo.size.height) * 0.75
+                ZStack {
+                    if sources.contains(.music) {
+                        RadialGradient(
+                            colors: [Theme.sourceColor(.music).opacity(0.22), .clear],
+                            center: .topLeading, startRadius: 0, endRadius: reach
+                        )
+                    }
+                    if sources.contains(.spotify) {
+                        RadialGradient(
+                            colors: [Theme.sourceColor(.spotify).opacity(0.13), .clear],
+                            center: .bottomTrailing, startRadius: 0, endRadius: reach
+                        )
+                    }
+                }
+            }
+            // A sheen along the top edge, like the glass elsewhere.
+            LinearGradient(colors: [Color.white.opacity(0.06), .clear], startPoint: .top, endPoint: .center)
+        }
+        .allowsHitTesting(false)
+    }
+}
+
+/// An empty sleeve where the artwork goes: frosted, with a rim of light and a quiet note.
+private struct EmptyArtwork: View {
+    let side: CGFloat
+
+    var body: some View {
+        let radius = max(6, side * 0.16)
+        let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
+        ZStack {
+            shape.fill(
+                LinearGradient(
+                    colors: [Color.white.opacity(0.16), Color.white.opacity(0.05)],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            )
+            shape.strokeBorder(
+                LinearGradient(
+                    colors: [Color.white.opacity(0.30), Color.white.opacity(0.06)],
+                    startPoint: .top,
+                    endPoint: .bottom
+                ),
+                lineWidth: 0.75
+            )
+            Image(systemName: "music.note")
+                .font(.system(size: side * 0.36, weight: .medium))
+                .foregroundStyle(Color.white.opacity(0.5))
+        }
+        .frame(width: side, height: side)
+        .shadow(color: .black.opacity(0.35), radius: side * 0.12, y: side * 0.06)
+    }
+}
+
+/// A glass capsule with the app's own glyph: "Music", "Spotify". In the mini artwork,
+/// just the glyph in a glass circle.
+private struct SourceButton: View {
+    let kind: SourceKind
+    let compact: Bool
+    let action: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            Group {
+                if compact {
+                    SourceGlyph(kind: kind, size: 13)
+                        .frame(width: 26, height: 26)
+                        .background(glass(Circle()))
+                        .contentShape(Circle())
+                } else {
+                    HStack(spacing: 7) {
+                        SourceGlyph(kind: kind, size: 13)
+                        Text(kind.displayName)
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(Theme.primary)
+                    }
+                    .padding(.leading, 10)
+                    .padding(.trailing, 13)
+                    .frame(height: 28)
+                    .background(glass(Capsule()))
+                    .contentShape(Capsule())
+                }
+            }
+        }
+        .buttonStyle(PressableStyle())
+        .help("Open \(kind.displayName)")
+        .onHover { hovering = $0 }
+        .animation(Theme.fade, value: hovering)
+    }
+
+    private func glass<S: InsettableShape>(_ shape: S) -> some View {
+        shape.fill(Color.white.opacity(hovering ? 0.17 : 0.10))
+            .overlay(
+                shape.strokeBorder(
+                    LinearGradient(
+                        colors: [Color.white.opacity(0.24), Color.white.opacity(0.05)],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    ),
+                    lineWidth: 0.5
+                )
+            )
     }
 }
 

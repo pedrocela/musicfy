@@ -15,7 +15,9 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN_DIR/Musicfy" "$APP/Contents/MacOS/Musicfy"
 cp Resources/Info.plist "$APP/Contents/Info.plist"
 
-if [ ! -f build/AppIcon.icns ]; then
+# Redraw the icon when it is missing or its drawing changed.
+if [ ! -f build/AppIcon.icns ] || [ tools/make-icon.swift -nt build/AppIcon.icns ]; then
+  rm -rf build/AppIcon.iconset
   swift tools/make-icon.swift build/AppIcon.iconset
   iconutil -c icns build/AppIcon.iconset -o build/AppIcon.icns
 fi
@@ -30,6 +32,9 @@ if [[ "${1:-}" == "--install" ]]; then
   sleep 1
   rm -rf /Applications/Musicfy.app
   cp -R "$APP" /Applications/
+  # Let Finder and the Dock pick up a new icon instead of the cached one.
+  touch /Applications/Musicfy.app
+  /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f /Applications/Musicfy.app || true
   open /Applications/Musicfy.app
   echo "Installed in /Applications and opened."
 fi

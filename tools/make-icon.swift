@@ -1,76 +1,161 @@
 // Draws the Musicfy icon and saves it as an iconset.
 // Usage: swift tools/make-icon.swift build/AppIcon.iconset
+//
+// The idea: a piece of artwork floating over a dark tile, tilted a little and lifted by its
+// shadow, with the player's glass strip and progress bar at its foot. Musicfy is the
+// artwork that stays on top of everything.
 import AppKit
 
 let output = CommandLine.arguments.dropFirst().first ?? "AppIcon.iconset"
 try? FileManager.default.createDirectory(atPath: output, withIntermediateDirectories: true)
 
+let sRGB = CGColorSpace(name: CGColorSpace.sRGB)!
+
+func rgba(_ hex: UInt32, _ alpha: CGFloat = 1) -> CGColor {
+    CGColor(
+        srgbRed: CGFloat((hex >> 16) & 0xFF) / 255,
+        green: CGFloat((hex >> 8) & 0xFF) / 255,
+        blue: CGFloat(hex & 0xFF) / 255,
+        alpha: alpha
+    )
+}
+
+func gradient(_ stops: [(CGColor, CGFloat)]) -> CGGradient {
+    CGGradient(colorsSpace: sRGB, colors: stops.map(\.0) as CFArray, locations: stops.map(\.1))!
+}
+
+func rounded(_ rect: CGRect, _ radius: CGFloat) -> CGPath {
+    CGPath(roundedRect: rect, cornerWidth: radius, cornerHeight: radius, transform: nil)
+}
+
 func render(_ side: Int) -> Data? {
-    let size = CGFloat(side)
-    guard let rep = NSBitmapImageRep(
-        bitmapDataPlanes: nil, pixelsWide: side, pixelsHigh: side,
-        bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
-        colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0
+    let s = CGFloat(side)
+    guard let ctx = CGContext(
+        data: nil, width: side, height: side, bitsPerComponent: 8, bytesPerRow: 0,
+        space: sRGB, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
     ) else { return nil }
+    // Top-left origin, y down, so the numbers read like the layout.
+    ctx.translateBy(x: 0, y: s)
+    ctx.scaleBy(x: 1, y: -1)
+    let ns = NSGraphicsContext(cgContext: ctx, flipped: true)
     NSGraphicsContext.saveGraphicsState()
-    NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
+    NSGraphicsContext.current = ns
 
-    // macOS icon shape: rounded square with margin.
-    let inset = size * 0.098
-    let rect = NSRect(x: inset, y: inset, width: size - inset * 2, height: size - inset * 2)
-    let radius = rect.width * 0.225
-    let shape = NSBezierPath(roundedRect: rect, xRadius: radius, yRadius: radius)
+    // macOS icon grid: an 824 pt rounded square inside 1024.
+    let inset = s * 0.098
+    let tile = CGRect(x: inset, y: inset, width: s - inset * 2, height: s - inset * 2)
+    let w = tile.width
+    let tilePath = rounded(tile, w * 0.225)
 
-    NSGraphicsContext.current?.saveGraphicsState()
-    let shadow = NSShadow()
-    shadow.shadowColor = NSColor.black.withAlphaComponent(0.35)
-    shadow.shadowBlurRadius = size * 0.03
-    shadow.shadowOffset = NSSize(width: 0, height: -size * 0.012)
-    shadow.set()
-    NSColor(srgbRed: 0.07, green: 0.05, blue: 0.04, alpha: 1).setFill()
-    shape.fill()
-    NSGraphicsContext.current?.restoreGraphicsState()
+    // Tile and its drop shadow (shadow offsets are in device space: negative y is down).
+    ctx.saveGState()
+    ctx.setShadow(offset: CGSize(width: 0, height: -s * 0.012), blur: s * 0.03, color: rgba(0x000000, 0.35))
+    ctx.addPath(tilePath)
+    ctx.setFillColor(rgba(0x0B0B10))
+    ctx.fillPath()
+    ctx.restoreGState()
 
-    // Warm glow, like lit artwork.
-    NSGraphicsContext.current?.saveGraphicsState()
-    shape.addClip()
-    let glow = NSGradient(colors: [
-        NSColor(srgbRed: 0.82, green: 0.39, blue: 0.18, alpha: 1),
-        NSColor(srgbRed: 0.54, green: 0.21, blue: 0.09, alpha: 1),
-        NSColor(srgbRed: 0.16, green: 0.08, blue: 0.06, alpha: 1),
-        NSColor(srgbRed: 0.07, green: 0.05, blue: 0.04, alpha: 1),
-    ], atLocations: [0, 0.38, 0.72, 1], colorSpace: .sRGB)
-    glow?.draw(in: shape, relativeCenterPosition: NSPoint(x: 0, y: 0.25))
+    ctx.saveGState()
+    ctx.addPath(tilePath)
+    ctx.clip()
+    // Graphite, a touch cooler at the top.
+    ctx.drawLinearGradient(
+        gradient([(rgba(0x2A2A33), 0), (rgba(0x0C0C10), 1)]),
+        start: CGPoint(x: 0, y: tile.minY), end: CGPoint(x: 0, y: tile.maxY), options: []
+    )
+    // The artwork's color spilling onto the tile.
+    let glowCenter = CGPoint(x: s / 2, y: s * 0.62)
+    ctx.drawRadialGradient(
+        gradient([(rgba(0xFA2D48, 0.38), 0), (rgba(0xFA2D48, 0), 1)]),
+        startCenter: glowCenter, startRadius: 0, endCenter: glowCenter, endRadius: w * 0.6, options: []
+    )
 
-    // Glass at the bottom, as in the player.
-    let glass = NSRect(x: rect.minX, y: rect.minY, width: rect.width, height: rect.height * 0.36)
-    NSGradient(colors: [
-        NSColor.black.withAlphaComponent(0.0),
-        NSColor.black.withAlphaComponent(0.45),
-    ])?.draw(in: glass, angle: -90)
+    // The floating artwork.
+    let cw = w * 0.66
+    let card = CGRect(x: (s - cw) / 2, y: tile.minY + w * 0.14, width: cw, height: cw)
+    let cardPath = rounded(card, cw * 0.17)
+    ctx.saveGState()
+    ctx.translateBy(x: card.midX, y: card.midY)
+    ctx.rotate(by: -7 * .pi / 180)
+    ctx.translateBy(x: -card.midX, y: -card.midY)
 
-    // Progress bar.
-    let barY = rect.minY + rect.height * 0.17
-    let barX = rect.minX + rect.width * 0.16
-    let barW = rect.width * 0.68
-    let barH = size * 0.022
-    NSColor.white.withAlphaComponent(0.25).setFill()
-    NSBezierPath(roundedRect: NSRect(x: barX, y: barY, width: barW, height: barH), xRadius: barH / 2, yRadius: barH / 2).fill()
-    NSColor.white.withAlphaComponent(0.92).setFill()
-    NSBezierPath(roundedRect: NSRect(x: barX, y: barY, width: barW * 0.38, height: barH), xRadius: barH / 2, yRadius: barH / 2).fill()
-    NSGraphicsContext.current?.restoreGraphicsState()
+    ctx.saveGState()
+    ctx.setShadow(offset: CGSize(width: 0, height: -s * 0.045), blur: s * 0.08, color: rgba(0x000000, 0.6))
+    ctx.addPath(cardPath)
+    ctx.setFillColor(rgba(0x000000))
+    ctx.fillPath()
+    ctx.restoreGState()
 
-    // Music note.
-    let config = NSImage.SymbolConfiguration(pointSize: size * 0.36, weight: .semibold)
+    ctx.saveGState()
+    ctx.addPath(cardPath)
+    ctx.clip()
+    // Sunset: amber, Music's pink, violet.
+    ctx.drawLinearGradient(
+        gradient([(rgba(0xFF9A3C), 0), (rgba(0xFA2D48), 0.45), (rgba(0x6B2BD9), 1)]),
+        start: CGPoint(x: card.minX, y: card.minY), end: CGPoint(x: card.maxX, y: card.maxY), options: []
+    )
+    let sun = CGPoint(x: card.minX + cw * 0.25, y: card.minY + cw * 0.2)
+    ctx.drawRadialGradient(
+        gradient([(rgba(0xFFD678, 0.75), 0), (rgba(0xFFD678, 0), 1)]),
+        startCenter: sun, startRadius: 0, endCenter: sun, endRadius: cw * 0.6, options: []
+    )
+
+    // The note.
+    let config = NSImage.SymbolConfiguration(pointSize: cw * 0.42, weight: .semibold)
         .applying(NSImage.SymbolConfiguration(paletteColors: [.white]))
     if let note = NSImage(systemSymbolName: "music.note", accessibilityDescription: nil)?.withSymbolConfiguration(config) {
-        let noteSize = note.size
-        let origin = NSPoint(x: (size - noteSize.width) / 2, y: rect.minY + rect.height * 0.36)
-        note.draw(in: NSRect(origin: origin, size: noteSize))
+        let size = note.size
+        let center = CGPoint(x: card.midX, y: card.minY + cw * 0.40)
+        ctx.saveGState()
+        ctx.setShadow(offset: CGSize(width: 0, height: -s * 0.008), blur: s * 0.02, color: rgba(0x500028, 0.35))
+        note.draw(
+            in: NSRect(x: center.x - size.width / 2, y: center.y - size.height / 2, width: size.width, height: size.height),
+            from: .zero, operation: .sourceOver, fraction: 1, respectFlipped: true, hints: nil
+        )
+        ctx.restoreGState()
     }
 
+    // The player's glass strip, with its progress bar.
+    let strip = CGRect(x: card.minX, y: card.maxY - cw * 0.24, width: cw, height: cw * 0.24)
+    ctx.drawLinearGradient(
+        gradient([(rgba(0x140A28, 0.22), 0), (rgba(0x140A28, 0.45), 1)]),
+        start: CGPoint(x: 0, y: strip.minY), end: CGPoint(x: 0, y: strip.maxY), options: []
+    )
+    ctx.setFillColor(rgba(0xFFFFFF, 0.22))
+    ctx.fill(CGRect(x: strip.minX, y: strip.minY, width: cw, height: max(1, s * 0.003)))
+    let barH = cw * 0.045
+    let bar = CGRect(x: card.minX + cw * 0.15, y: strip.midY - barH / 2, width: cw * 0.70, height: barH)
+    ctx.addPath(rounded(bar, barH / 2))
+    ctx.setFillColor(rgba(0xFFFFFF, 0.32))
+    ctx.fillPath()
+    ctx.addPath(rounded(CGRect(x: bar.minX, y: bar.minY, width: bar.width * 0.42, height: barH), barH / 2))
+    ctx.setFillColor(rgba(0xFFFFFF))
+    ctx.fillPath()
+    ctx.restoreGState()
+
+    // A rim of light on the artwork, brighter on top.
+    ctx.saveGState()
+    ctx.addPath(rounded(card.insetBy(dx: s * 0.002, dy: s * 0.002), cw * 0.17))
+    ctx.setLineWidth(s * 0.004)
+    ctx.replacePathWithStrokedPath()
+    ctx.clip()
+    ctx.drawLinearGradient(
+        gradient([(rgba(0xFFFFFF, 0.5), 0), (rgba(0xFFFFFF, 0.06), 1)]),
+        start: CGPoint(x: 0, y: card.minY), end: CGPoint(x: 0, y: card.maxY), options: []
+    )
+    ctx.restoreGState()
+    ctx.restoreGState() // tilt
+    ctx.restoreGState() // tile clip
+
+    // Hairline around the tile.
+    ctx.addPath(rounded(tile.insetBy(dx: s * 0.001, dy: s * 0.001), w * 0.225))
+    ctx.setStrokeColor(rgba(0xFFFFFF, 0.1))
+    ctx.setLineWidth(max(1, s * 0.002))
+    ctx.strokePath()
+
     NSGraphicsContext.restoreGraphicsState()
-    return rep.representation(using: .png, properties: [:])
+    guard let image = ctx.makeImage() else { return nil }
+    return NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:])
 }
 
 for base in [16, 32, 128, 256, 512] {
