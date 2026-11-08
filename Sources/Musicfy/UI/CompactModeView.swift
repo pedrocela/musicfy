@@ -41,16 +41,7 @@ struct CompactModeView: View {
 
     private var header: some View {
         HStack(spacing: 12) {
-            ZStack {
-                CrossfadingArtwork(player: player)
-            }
-            .frame(width: 44, height: 44)
-            .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .strokeBorder(Color.white.opacity(0.15), lineWidth: 0.5)
-            )
-            .allowsHitTesting(false)
+            CompactThumbnail(player: player)
 
             ZStack(alignment: .leading) {
                 VStack(alignment: .leading, spacing: 1) {
@@ -93,5 +84,29 @@ struct CompactModeView: View {
             .animation(Theme.fade, value: panel.isHovering)
         }
         .frame(height: 44)
+    }
+}
+
+/// The artwork thumbnail. Clicking it brings the app that's playing to the front.
+private struct CompactThumbnail: View {
+    @ObservedObject var player: PlayerController
+    @State private var hovering = false
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: 7, style: .continuous)
+        Button {
+            if let kind = player.state?.source { player.open(kind) }
+        } label: {
+            CrossfadingArtwork(player: player)
+                .frame(width: 44, height: 44)
+                .overlay(Color.black.opacity(hovering ? 0.18 : 0))
+                .clipShape(shape)
+                .overlay(shape.strokeBorder(Color.white.opacity(hovering ? 0.3 : 0.15), lineWidth: 0.5))
+                .contentShape(shape)
+        }
+        .buttonStyle(PressableStyle())
+        .help(player.state.map { "Open \($0.source.displayName)" } ?? "")
+        .onHover { hovering = $0 }
+        .animation(Theme.fade, value: hovering)
     }
 }
