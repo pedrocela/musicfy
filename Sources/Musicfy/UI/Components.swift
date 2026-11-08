@@ -53,11 +53,38 @@ struct WindowDragArea: NSViewRepresentable {
             if event.clickCount == 2 {
                 onDoubleClick()
             } else {
-                // Drag the window; dropped at the top center, it becomes the Island.
-                AppDelegate.shared?.windowDragBegan()
-                window?.performDrag(with: event)
-                if NSEvent.pressedMouseButtons & 1 == 0 { AppDelegate.shared?.windowDragEnded() }
+                // Drag the window, never past the screen's edges; dropped at the top
+                // center, it becomes the Island.
+                drag(from: event)
             }
+        }
+
+        private func drag(from event: NSEvent) {
+            guard let window, let app = AppDelegate.shared else { return }
+            app.windowDragBegan()
+            let startMouse = NSEvent.mouseLocation
+            let startOrigin = window.frame.origin
+            window.trackEvents(
+                matching: [.leftMouseDragged, .leftMouseUp],
+                timeout: NSEvent.foreverDuration,
+                mode: .eventTracking
+            ) { event, stop in
+                guard let event else { return }
+                if event.type == .leftMouseUp {
+                    stop.pointee = true
+                    return
+                }
+                let mouse = NSEvent.mouseLocation
+                let proposed = NSRect(
+                    x: startOrigin.x + mouse.x - startMouse.x,
+                    y: startOrigin.y + mouse.y - startMouse.y,
+                    width: window.frame.width,
+                    height: window.frame.height
+                )
+                window.setFrameOrigin(app.keptOnScreen(proposed, near: mouse).origin)
+                app.windowDragMoved(mouse: mouse)
+            }
+            app.windowDragEnded()
         }
 
         override func rightMouseDown(with event: NSEvent) {

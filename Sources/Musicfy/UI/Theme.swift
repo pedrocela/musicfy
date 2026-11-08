@@ -25,6 +25,8 @@ enum Theme {
     static let islandTopGap: CGFloat = 8
     /// How far the Island has to be pulled down to become the artwork.
     static let islandPullThreshold: CGFloat = 64
+    /// The player never goes closer than this to the screen's edges.
+    static let screenMargin: CGFloat = 4
     /// Gap to the screen edge when the Island snaps to a side.
     static let islandSideGap: CGFloat = 12
 

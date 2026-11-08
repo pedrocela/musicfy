@@ -421,12 +421,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     private func framedRect(for mode: DisplayMode) -> NSRect {
         let size = size(for: mode)
-        var frame = NSRect(x: anchor.x, y: anchor.y - size.height, width: size.width, height: size.height)
+        let frame = NSRect(x: anchor.x, y: anchor.y - size.height, width: size.width, height: size.height)
         // Keep it on screen (a display was unplugged, it grew near an edge).
-        let screen = NSScreen.screens.first { $0.visibleFrame.intersects(frame) } ?? NSScreen.main ?? NSScreen.screens[0]
-        let visible = screen.visibleFrame
-        frame.origin.x = min(max(frame.minX, visible.minX + 4), visible.maxX - frame.width - 4)
-        frame.origin.y = min(max(frame.minY, visible.minY + 4), visible.maxY - frame.height - 4)
+        return keptOnScreen(frame)
+    }
+
+    /// The usable area of the screen a frame is on (or the one under the mouse while
+    /// dragging), less a small margin. The player never leaves it.
+    private func usableArea(for frame: NSRect, near point: NSPoint? = nil) -> NSRect {
+        let screens = NSScreen.screens
+        let byPoint = point.flatMap { p in screens.first { NSMouseInRect(p, $0.frame, false) } }
+        let byOverlap = screens.max { a, b in
+            let x = a.visibleFrame.intersection(frame), y = b.visibleFrame.intersection(frame)
+            return x.width * x.height < y.width * y.height
+        }
+        let screen = byPoint ?? byOverlap ?? NSScreen.main ?? screens[0]
+        return screen.visibleFrame.insetBy(dx: Theme.screenMargin, dy: Theme.screenMargin)
+    }
+
+    /// The same frame, slid back inside the screen's usable area.
+    func keptOnScreen(_ frame: NSRect, near point: NSPoint? = nil) -> NSRect {
+        let area = usableArea(for: frame, near: point)
+        var frame = frame
+        frame.origin.x = min(max(frame.minX, area.minX), area.maxX - frame.width)
+        frame.origin.y = min(max(frame.minY, area.minY), area.maxY - frame.height)
         return frame
     }
 
@@ -545,9 +563,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             var horizontal: CGFloat = 0, vertical: CGFloat = 0
             if edges.contains(.right) { horizontal = dx } else if edges.contains(.left) { horizontal = -dx }
             if edges.contains(.bottom) { vertical = -dy } else if edges.contains(.top) { vertical = dy }
-            let proposed = resizeStartSide + (abs(horizontal) >= abs(vertical) ? horizontal : vertical)
+            // From a corner, the size follows the mouse projected onto the corner's diagonal,
+            // so the corner slides smoothly under the pointer instead of jumping between axes.
+            let growth: CGFloat
+            if edges.contains(.left) || edges.contains(.right), edges.contains(.top) || edges.contains(.bottom) {
+                growth = (horizontal + vertical) / 2
+            } else {
+                growth = horizontal + vertical
+            }
+            let proposed = resizeStartSide + growth
             // Past the minimum or maximum it resists, like rubber.
-            let side: CGFloat
+            var side: CGFloat
             if proposed < range.lowerBound {
                 side = range.lowerBound - (range.lowerBound - proposed) * 0.25
             } else if proposed > range.upperBound {
@@ -555,11 +581,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             } else {
                 side = proposed
             }
-            // The corner opposite the one being pulled stays put.
-            let top = edges.contains(.top) ? resizeStartFrame.maxY - resizeStartSide + side : resizeStartFrame.maxY
+            // The screen's edges are a hard stop: it grows only as far as there is room.
+            let area = usableArea(for: resizeStartFrame)
+            let roomWide = edges.contains(.left) ? resizeStartFrame.maxX - area.minX : area.maxX - resizeStartFrame.minX
+            let roomHigh = edges.contains(.top) ? area.maxY - resizeStartFrame.minY : resizeStartFrame.maxY - area.minY
+            side = min(side, max(range.lowerBound, min(roomWide, roomHigh - extra)))
+            // The corner opposite the one being pulled stays exactly where it was.
+            let height = side + extra
             let left = edges.contains(.left) ? resizeStartFrame.maxX - side : resizeStartFrame.minX
+            let bottom = edges.contains(.top) ? resizeStartFrame.minY : resizeStartFrame.maxY - height
             panelModel.artworkSide = side
-            panel.setFrame(NSRect(x: left, y: top - side - extra, width: side, height: side + extra), display: true)
+            panel.setFrame(NSRect(x: left, y: bottom, width: side, height: height), display: true)
             return true
 
         case .compact:
@@ -575,7 +607,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             let height = base.height + (side - base.height) * progress
             let left = edges.contains(.left) ? resizeStartFrame.maxX - width : resizeStartFrame.minX
             panelModel.grow = progress
-            panel.setFrame(NSRect(x: left, y: resizeStartFrame.maxY - height, width: width, height: height), display: true)
+            let frame = NSRect(x: left, y: resizeStartFrame.maxY - height, width: width, height: height)
+            panel.setFrame(keptOnScreen(frame), display: true)
             return true
 
         case .island:
@@ -659,6 +692,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         if let start = dragStartAnchor { anchor = start }
         panelModel.islandAlignment = .center
         userSwitch(to: .island)
+    }
+
+    /// Called on every step of a window drag (the drag runs its own event loop).
+    func windowDragMoved(mouse: NSPoint) {
+        trackWindowDrag(mouse: mouse)
     }
 
     private func trackWindowDrag(mouse: NSPoint) {
