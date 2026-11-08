@@ -16,6 +16,10 @@ enum Theme {
     /// The sides where the small, normal and large measures apply (`ArtworkMetrics`).
     static let artworkReferenceSides: (CGFloat, CGFloat, CGFloat) = (260, 320, 420)
     static let compactSize = CGSize(width: 320, height: 136)
+    /// Compact's cover fills the height, 16 pt from every edge it touches.
+    static let compactInset: CGFloat = 16
+    static var compactArtSide: CGFloat { compactSize.height - compactInset * 2 }
+    static let compactArtRadius: CGFloat = 5
     static let islandCollapsed = CGSize(width: 300, height: 44)
     static let islandExpanded = CGSize(width: 380, height: 160)
     /// One corner radius for every mode, the soft corner of an album cover (as Music
@@ -46,7 +50,7 @@ enum Theme {
     static let drawerHeight: CGFloat = 380
 
     // MARK: Type
-    static let compactTitle = Font.system(size: 14, weight: .semibold)
+    static let compactTitle = Font.system(size: 15, weight: .semibold)
     static let compactSubtitle = Font.system(size: 12)
     static let islandTitle = Font.system(size: 13, weight: .semibold)
     static let islandSubtitle = Font.system(size: 11)

@@ -187,12 +187,12 @@ struct VolumeBar: View {
 
 struct TransportRow: View {
     enum Size {
-        case large, medium
+        case large, medium, small
 
-        var side: CGFloat { self == .large ? 17 : 16 }
-        var skip: CGFloat { self == .large ? 26 : 22 }
-        var play: CGFloat { self == .large ? 28 : 24 }
-        var height: CGFloat { self == .large ? 44 : 36 }
+        var side: CGFloat { switch self { case .large: 17; case .medium: 16; case .small: 12 } }
+        var skip: CGFloat { switch self { case .large: 26; case .medium: 22; case .small: 17 } }
+        var play: CGFloat { switch self { case .large: 28; case .medium: 24; case .small: 20 } }
+        var height: CGFloat { switch self { case .large: 44; case .medium: 36; case .small: 32 } }
     }
 
     @ObservedObject var player: PlayerController
@@ -719,9 +719,9 @@ struct EmptyStateView: View {
     private var compact: some View {
         HStack(spacing: 14) {
             EmptyCover(sources: player.installedSources)
-                .frame(width: 72, height: 72)
-                .clipShape(RoundedRectangle(cornerRadius: Theme.thumbRadius, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: Theme.thumbRadius, style: .continuous).strokeBorder(Color.white.opacity(0.12), lineWidth: 0.5))
+                .frame(width: Theme.compactArtSide, height: Theme.compactArtSide)
+                .clipShape(RoundedRectangle(cornerRadius: Theme.compactArtRadius, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: Theme.compactArtRadius, style: .continuous).strokeBorder(Color.white.opacity(0.12), lineWidth: 0.5))
                 .shadow(color: .black.opacity(0.3), radius: 8, y: 4)
             VStack(alignment: .leading, spacing: 0) {
                 Text("Nothing Playing")
@@ -738,7 +738,7 @@ struct EmptyStateView: View {
             }
             Spacer(minLength: 0)
         }
-        .padding(.horizontal, 16)
+        .padding(.horizontal, Theme.compactInset)
     }
 
     /// Same frame as the open Island while playing: thumbnail and text up top, then one

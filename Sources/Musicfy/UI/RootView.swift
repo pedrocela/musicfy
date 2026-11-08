@@ -154,7 +154,7 @@ struct MorphView: View, Animatable {
             let p = max(0, min(1, progress))
             let start: CGRect = look == .artwork
                 ? CGRect(origin: .zero, size: size)
-                : CGRect(x: 16, y: 16, width: 44, height: 44)
+                : CGRect(x: Theme.compactInset, y: Theme.compactInset, width: Theme.compactArtSide, height: Theme.compactArtSide)
             let end = CGRect(
                 x: Theme.islandThumbInset,
                 y: (size.height - Theme.islandThumb) / 2,
@@ -167,7 +167,7 @@ struct MorphView: View, Animatable {
                 width: lerp(start.width, end.width, p),
                 height: lerp(start.height, end.height, p)
             )
-            let startRadius: CGFloat = look == .artwork ? Theme.cornerRadius : Theme.thumbRadius
+            let startRadius: CGFloat = look == .artwork ? Theme.cornerRadius : Theme.compactArtRadius
             ZStack(alignment: .topLeading) {
                 // The Island wears the same artwork tint as compact: from compact the
                 // background stays; from artwork it fades in as the cover shrinks.
