@@ -46,8 +46,6 @@ struct IslandView: View {
             .frame(width: size.width, height: size.height, alignment: .top)
             .clipShape(shape)
             .overlay(shape.strokeBorder(Theme.islandStroke, lineWidth: 0.5))
-            // Pulled down, it grows a little and its rim brightens: it's about to become the artwork.
-            .overlay(shape.strokeBorder(Theme.ink.opacity(0.28 * panel.islandPull), lineWidth: 1))
             // The shadow comes from a plain shape behind the pill (the tint above covers it).
             // A shadow of the pill itself is redrawn every time anything inside it moves.
             .background(
@@ -60,7 +58,9 @@ struct IslandView: View {
                     .shadow(color: Theme.islandShadowNear.opacity(expanded ? 1 : 0.8), radius: expanded ? 6 : 3, y: expanded ? 3 : 1)
                     .shadow(color: Theme.islandShadowContact, radius: 0.5, y: 0)
             )
-            .scaleEffect(1 + 0.08 * panel.islandPull, anchor: .top)
+            // Pulled down, it grows a little: it's about to become the artwork. No darker rim:
+            // in light mode it read as a hard edge. Kept small so the shadow fits the margins.
+            .scaleEffect(1 + 0.04 * panel.islandPull, anchor: .top)
             .animation(Theme.islandSpring, value: expanded)
             Spacer(minLength: 0)
         }
