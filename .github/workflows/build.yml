@@ -35,7 +35,8 @@ jobs:
         run: |
           N="$(git rev-list --count HEAD)"
           V="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' Resources/Info.plist)"
+          { cat .github/release-notes.md; echo; echo "Built from $(git rev-parse --short HEAD)."; } > build/release-notes.md
           gh release create "build-$N" build/Musicfy.zip \
             --title "Musicfy $V (build $N)" \
-            --notes "Built from $(git rev-parse --short HEAD). Install steps: see the README." \
+            --notes-file build/release-notes.md \
             --target "$GITHUB_SHA" --latest
