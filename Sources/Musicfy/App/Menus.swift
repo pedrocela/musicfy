@@ -148,8 +148,8 @@ enum Menus {
         // The on/off settings live together in a submenu, with the usual checks, so the
         // main menu keeps one column of icons and its last group is only app commands.
         menu.addSubmenu("Settings", icon: "gearshape") { sub in
-            sub.add("Shrink When Paused", checked: settings.idleBehavior == .compact) {
-                settings.idleBehavior = settings.idleBehavior == .compact ? .stay : .compact
+            sub.add("Fade When Paused", checked: settings.idleBehavior == .fade) {
+                settings.idleBehavior = settings.idleBehavior == .fade ? .stay : .fade
             }
             sub.add("Show Over Videos", checked: settings.showOverFullScreen) {
                 settings.showOverFullScreen.toggle()
