@@ -33,29 +33,66 @@ final class PlayerPanel: NSPanel {
 
     static let everySpace: NSWindow.CollectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .managed, .ignoresCycle]
 
-    /// When a full-screen Space closes, macOS moves every hidden window of the app (ordered
-    /// out or at alpha 0) to the first desktop and keeps it there, even one that asked for
-    /// every Space. Setting the behavior again before showing puts it back on all of them.
-    func reassertAllSpaces() {
-        collectionBehavior = []
-        collectionBehavior = Self.everySpace
+    // MARK: - Hidden without leaving the screen
+
+    /// When a full-screen Space closes, macOS moves every ordered-out window of the app to
+    /// the first desktop and keeps it there for good, even one that asked for every Space;
+    /// setting the collection behavior again doesn't undo it. A window that stays ordered
+    /// in (at alpha 0) keeps every Space. So hiding the player never orders it out: it goes
+    /// transparent and click-through, and `isShown` says whether it is really showing.
+    private(set) var concealed = false
+
+    /// On screen and not hidden. Use this, not `isVisible` (true while concealed).
+    var isShown: Bool { isVisible && !concealed }
+
+    override func orderOut(_ sender: Any?) {
+        guard isVisible, !concealed else { return }
+        concealed = true
+        alphaValue = 0
+        super.ignoresMouseEvents = true
+        if isKeyWindow {
+            // Give the keyboard back: a key panel would keep catching keys while invisible.
+            super.orderOut(nil)
+            super.orderFrontRegardless()
+        }
     }
 
-    /// Same, for a player already on screen that got left behind on another desktop.
-    func rejoinAllSpaces() {
-        guard isVisible, !isOnActiveSpace else { return }
-        reassertAllSpaces()
-        let alpha = alphaValue
-        orderOut(nil)
-        orderFrontRegardless()
-        alphaValue = alpha
+    override func orderFrontRegardless() {
+        reveal()
+        super.orderFrontRegardless()
     }
+
+    override func orderFront(_ sender: Any?) {
+        reveal()
+        super.orderFront(sender)
+    }
+
+    override func makeKeyAndOrderFront(_ sender: Any?) {
+        reveal()
+        super.makeKeyAndOrderFront(sender)
+    }
+
+    private func reveal() {
+        guard concealed else { return }
+        concealed = false
+        super.ignoresMouseEvents = false
+    }
+
+    /// Hidden, it lets every click through, whatever the hover logic asks for.
+    override var ignoresMouseEvents: Bool {
+        get { super.ignoresMouseEvents }
+        set { super.ignoresMouseEvents = concealed || newValue }
+    }
+
+    /// Ordered in but left on one desktop only (pinned by macOS before this fix, or by
+    /// anything else): it can't be freed, only replaced by a new window.
+    var isPinnedToOneSpace: Bool { isVisible && !isOnActiveSpace }
 
     /// Playback keys while the player has the keyboard.
     var onPlaybackKey: ((PlaybackKey) -> Void)?
 
     // Can take the keyboard without activating the app.
-    override var canBecomeKey: Bool { true }
+    override var canBecomeKey: Bool { !concealed }
     override var canBecomeMain: Bool { false }
 
     // Caught here, before any SwiftUI control, so Space never presses a focused button.

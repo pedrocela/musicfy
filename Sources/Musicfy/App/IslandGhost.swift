@@ -11,7 +11,11 @@ final class IslandGhost {
     }
 
     private let model = Model()
-    private lazy var window: NSPanel = {
+    private lazy var window: NSPanel = makeWindow()
+    /// Hidden by alpha, never ordered out: see `PlayerPanel.concealed`.
+    private var shown = false
+
+    private func makeWindow() -> NSPanel {
         let panel = NSPanel(
             contentRect: NSRect(origin: .zero, size: Theme.islandCollapsed),
             styleMask: [.borderless, .nonactivatingPanel],
@@ -25,21 +29,25 @@ final class IslandGhost {
         panel.backgroundColor = .clear
         panel.hasShadow = false
         panel.ignoresMouseEvents = true
+        panel.isReleasedWhenClosed = false
         panel.animationBehavior = .none
         panel.alphaValue = 0
         let host = NSHostingView(rootView: GhostView(model: model))
         host.sizingOptions = []
         panel.contentView = host
         return panel
-    }()
+    }
 
     /// `closeness` from 0 (far) to 1 (on it); `armed` when letting go would make the Island.
     func show(at frame: NSRect, closeness: CGFloat, armed: Bool) {
         if window.frame != frame { window.setFrame(frame, display: false) }
-        if !window.isVisible {
-            // A hidden window can be pinned to one desktop after a full-screen Space closes.
-            window.collectionBehavior = []
-            window.collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle]
+        if window.isVisible, !window.isOnActiveSpace {
+            // Left on one desktop by macOS: only a new window joins every Space again.
+            window.close()
+            window = makeWindow()
+        }
+        if !shown || !window.isVisible {
+            shown = true
             window.orderFrontRegardless()
         }
         let alpha = armed ? 1 : 0.5 * closeness
@@ -50,13 +58,12 @@ final class IslandGhost {
     }
 
     func hide() {
-        guard window.isVisible else { return }
+        guard shown else { return }
+        shown = false
         model.armed = false
         NSAnimationContext.runAnimationGroup({ context in
             context.duration = 0.18
             window.animator().alphaValue = 0
-        }, completionHandler: { [weak self] in
-            Task { @MainActor in self?.window.orderOut(nil) }
         })
     }
 
