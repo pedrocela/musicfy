@@ -114,9 +114,9 @@ private struct QueueThumb: View {
     var body: some View {
         ArtworkFill(image: sameAlbum ? player.artwork : image)
             .frame(width: 34, height: 34)
-            .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: 3, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: 5, style: .continuous)
+                RoundedRectangle(cornerRadius: 3, style: .continuous)
                     .strokeBorder(Color.white.opacity(0.12), lineWidth: 0.5)
             )
             .task(id: item.id) {

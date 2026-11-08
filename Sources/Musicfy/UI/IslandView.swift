@@ -148,7 +148,7 @@ struct IslandView: View {
                     .frame(maxHeight: .infinity)
             } else {
                 HStack(alignment: .top, spacing: 12) {
-                    thumbnail(side: 56, radius: Theme.islandThumbRadius)
+                    thumbnail(side: 56, radius: Theme.thumbRadius)
                     VStack(alignment: .leading, spacing: 2) {
                         MarqueeText(text: player.state?.title ?? "", font: Theme.islandOpenTitle, color: Theme.primary, height: 19)
                         SubtitleLine(player: player, font: Theme.compactSubtitle, height: 16, showsLyric: true)

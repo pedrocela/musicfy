@@ -8,7 +8,7 @@ import os
 /// Clipped with its own mask: SwiftUI's clip doesn't always reach an AppKit view.
 struct VisualEffectBackground: NSViewRepresentable {
     var material: NSVisualEffectView.Material = .hudWindow
-    var cornerRadius: CGFloat = 16
+    var cornerRadius: CGFloat = Theme.cornerRadius
 
     func makeNSView(context: Context) -> NSVisualEffectView {
         let view = NSVisualEffectView()

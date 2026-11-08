@@ -18,12 +18,15 @@ enum Theme {
     static let compactSize = CGSize(width: 320, height: 136)
     static let islandCollapsed = CGSize(width: 300, height: 44)
     static let islandExpanded = CGSize(width: 380, height: 160)
-    /// One corner radius for every mode, so artwork, compact and the Island read as one family.
-    static let cornerRadius: CGFloat = 16
-    /// Thumbnail in the closed Island: 6 pt from the edge, so a concentric 10 pt radius.
+    /// One corner radius for every mode, the soft corner of an album cover (as Music
+    /// rounds artwork), so artwork, compact and the Island read as one family: covers.
+    static let cornerRadius: CGFloat = 6
+    /// Artwork thumbnails (compact, open Island, empty cover): the same cover corner, scaled down.
+    static let thumbRadius: CGFloat = 4
+    /// Thumbnail in the closed Island, 6 pt from the edge.
     static let islandThumb: CGFloat = 32
     static let islandThumbInset: CGFloat = 6
-    static let islandThumbRadius: CGFloat = cornerRadius - islandThumbInset
+    static let islandThumbRadius: CGFloat = 3
     /// The Island window leaves room for the shadow around the open pill.
     static let islandShadowMargin: CGFloat = 24
     /// Gap between the menu bar and the Island.

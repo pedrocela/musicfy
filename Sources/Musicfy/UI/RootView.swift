@@ -167,7 +167,7 @@ struct MorphView: View, Animatable {
                 width: lerp(start.width, end.width, p),
                 height: lerp(start.height, end.height, p)
             )
-            let startRadius: CGFloat = look == .artwork ? Theme.cornerRadius : 8
+            let startRadius: CGFloat = look == .artwork ? Theme.cornerRadius : Theme.thumbRadius
             ZStack(alignment: .topLeading) {
                 // The Island wears the same artwork tint as compact: from compact the
                 // background stays; from artwork it fades in as the cover shrinks.

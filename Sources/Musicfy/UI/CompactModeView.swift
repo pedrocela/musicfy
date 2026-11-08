@@ -93,7 +93,7 @@ private struct CompactThumbnail: View {
     @State private var hovering = false
 
     var body: some View {
-        let shape = RoundedRectangle(cornerRadius: 7, style: .continuous)
+        let shape = RoundedRectangle(cornerRadius: Theme.thumbRadius, style: .continuous)
         Button {
             if let kind = player.state?.source { player.open(kind) }
         } label: {

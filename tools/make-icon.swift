@@ -73,7 +73,8 @@ func render(_ side: Int) -> Data? {
     // The floating artwork.
     let cw = w * 0.66
     let card = CGRect(x: (s - cw) / 2, y: tile.minY + w * 0.14, width: cw, height: cw)
-    let cardPath = rounded(card, cw * 0.17)
+    // The cover corner, as Music rounds artwork (and as the player does).
+    let cardPath = rounded(card, cw * 0.035)
     ctx.saveGState()
     ctx.translateBy(x: card.midX, y: card.midY)
     ctx.rotate(by: -7 * .pi / 180)
@@ -135,7 +136,7 @@ func render(_ side: Int) -> Data? {
 
     // A rim of light on the artwork, brighter on top.
     ctx.saveGState()
-    ctx.addPath(rounded(card.insetBy(dx: s * 0.002, dy: s * 0.002), cw * 0.17))
+    ctx.addPath(rounded(card.insetBy(dx: s * 0.002, dy: s * 0.002), cw * 0.035))
     ctx.setLineWidth(s * 0.004)
     ctx.replacePathWithStrokedPath()
     ctx.clip()

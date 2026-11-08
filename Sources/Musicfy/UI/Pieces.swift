@@ -720,8 +720,8 @@ struct EmptyStateView: View {
         HStack(spacing: 14) {
             EmptyCover(sources: player.installedSources)
                 .frame(width: 72, height: 72)
-                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color.white.opacity(0.12), lineWidth: 0.5))
+                .clipShape(RoundedRectangle(cornerRadius: Theme.thumbRadius, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: Theme.thumbRadius, style: .continuous).strokeBorder(Color.white.opacity(0.12), lineWidth: 0.5))
                 .shadow(color: .black.opacity(0.3), radius: 8, y: 4)
             VStack(alignment: .leading, spacing: 0) {
                 Text("Nothing Playing")
@@ -748,9 +748,9 @@ struct EmptyStateView: View {
             HStack(alignment: .center, spacing: 12) {
                 EmptyCover(sources: player.installedSources)
                     .frame(width: 56, height: 56)
-                    .clipShape(RoundedRectangle(cornerRadius: Theme.islandThumbRadius, style: .continuous))
+                    .clipShape(RoundedRectangle(cornerRadius: Theme.thumbRadius, style: .continuous))
                     .overlay(
-                        RoundedRectangle(cornerRadius: Theme.islandThumbRadius, style: .continuous)
+                        RoundedRectangle(cornerRadius: Theme.thumbRadius, style: .continuous)
                             .strokeBorder(Color.white.opacity(0.1), lineWidth: 0.5)
                     )
                 VStack(alignment: .leading, spacing: 2) {
