@@ -503,8 +503,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     // Island: top center of the screen with the menu bar.
     private var islandWindowSize: CGSize {
         CGSize(
-            width: Theme.islandExpanded.width + Theme.islandShadowMargin * 2,
-            height: Theme.islandExpanded.height + Theme.islandShadowMargin * 1.5
+            width: Theme.islandExpanded.width + Theme.islandShadowSide * 2,
+            height: Theme.islandShadowTop + Theme.islandExpanded.height + Theme.islandShadowBottom
         )
     }
 
@@ -512,19 +512,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let screen = NSScreen.screens.first ?? NSScreen.main!
         let visible = screen.visibleFrame
         let size = islandWindowSize
-        let margin = Theme.islandShadowMargin
+        let margin = Theme.islandShadowSide
         let x: CGFloat
         switch panelModel.islandAlignment {
         case .leading: x = visible.minX + Theme.islandSideGap - margin
         case .center: x = visible.midX - size.width / 2
         case .trailing: x = visible.maxX - Theme.islandSideGap + margin - size.width
         }
-        return NSRect(x: x, y: visible.maxY - Theme.islandTopGap - size.height, width: size.width, height: size.height)
+        // The top margin rises behind the gap under the menu bar (and the bar itself, which
+        // draws over it), so the pill keeps its place and its shadow shows above it too.
+        let y = visible.maxY - Theme.islandTopGap + Theme.islandShadowTop - size.height
+        return NSRect(x: x, y: y, width: size.width, height: size.height)
     }
 
     /// Distance from the window's left edge to the pill's.
     private func islandPillOffset(width: CGFloat, alignment: IslandAlignment) -> CGFloat {
-        let margin = Theme.islandShadowMargin
+        let margin = Theme.islandShadowSide
         switch alignment {
         case .leading: return margin
         case .center: return (islandWindowSize.width - width) / 2
@@ -536,7 +539,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private func islandPillRect(inWindow frame: NSRect, expanded: Bool) -> NSRect {
         let size = expanded ? Theme.islandExpanded : Theme.islandCollapsed
         let x = frame.minX + islandPillOffset(width: size.width, alignment: panelModel.islandAlignment)
-        return NSRect(x: x, y: frame.maxY - size.height, width: size.width, height: size.height)
+        return NSRect(x: x, y: frame.maxY - Theme.islandShadowTop - size.height, width: size.width, height: size.height)
     }
 
     private func islandPillRect() -> NSRect {

@@ -37,9 +37,14 @@ enum Theme {
     static let islandThumb: CGFloat = 32
     static let islandThumbInset: CGFloat = 6
     static let islandThumbRadius: CGFloat = 3
-    /// The Island window leaves room for the shadow around the open pill (sides and top;
-    /// 1.5 × below). Keep the shadow's blur + offset inside it, or it's cut off square.
-    static let islandShadowMargin: CGFloat = 32
+    /// The Island window leaves room for the shadow all around the open pill, more below
+    /// (the shadow falls a little) and less above. The top margin reaches up behind the gap
+    /// under the menu bar, so the pill stays where it was. Keep the shadow's blur + offset
+    /// inside these, or it's cut off square: a SwiftUI shadow fades out about 2 × its radius
+    /// from the shape.
+    static let islandShadowSide: CGFloat = 48
+    static let islandShadowTop: CGFloat = 36
+    static let islandShadowBottom: CGFloat = 60
     /// Gap between the menu bar and the Island.
     static let islandTopGap: CGFloat = 8
     /// Dragging the player to the top: it's armed to become the Island when its center is
@@ -126,6 +131,12 @@ enum Theme {
     )
     static let windowStroke = adaptive(dark: white(0.12), light: black(0.10))
     static let islandStroke = adaptive(dark: white(0.09), light: black(0.08))
+    /// The open Island's shadow, soft like a macOS window's: a wide ambient haze that shows
+    /// on every side, a closer one that gives it depth and a faint contact line. Lighter in
+    /// light mode, as the system's own window shadows are.
+    static let islandShadowAmbient = adaptive(dark: black(0.42), light: black(0.20))
+    static let islandShadowNear = adaptive(dark: black(0.20), light: black(0.08))
+    static let islandShadowContact = adaptive(dark: black(0.30), light: black(0.10))
     /// The sheen at the top of compact and the Island.
     static let sheen = adaptive(dark: white(0.07), light: white(0.40))
     /// The rim around covers and thumbnails.
