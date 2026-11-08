@@ -16,12 +16,17 @@ enum Theme {
     /// The sides where the small, normal and large measures apply (`ArtworkMetrics`).
     static let artworkReferenceSides: (CGFloat, CGFloat, CGFloat) = (260, 320, 420)
     static let compactSize = CGSize(width: 320, height: 136)
+    /// Compact stretches sideways up to 30 % wider. Pulled narrower than its minimum,
+    /// it turns into artwork once the pull passes `compactShrinkToArtwork`.
+    static let compactWidthRange: ClosedRange<CGFloat> = 320...416
+    static let compactShrinkToArtwork: CGFloat = 90
     /// Compact's cover fills the height, 16 pt from every edge it touches.
     static let compactInset: CGFloat = 16
     static var compactArtSide: CGFloat { compactSize.height - compactInset * 2 }
     static let compactArtRadius: CGFloat = 5
     static let islandCollapsed = CGSize(width: 300, height: 44)
-    static let islandExpanded = CGSize(width: 380, height: 160)
+    /// The open Island is compact on hover: same size, same layout.
+    static let islandExpanded = compactSize
     /// One corner radius for every mode, the soft corner of an album cover (as Music
     /// rounds artwork), so artwork, compact and the Island read as one family: covers.
     static let cornerRadius: CGFloat = 6

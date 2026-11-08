@@ -60,6 +60,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     // Resizing from the edges.
     private var resizeStartFrame = NSRect.zero
     private var resizeStartSide: CGFloat = 0
+    private var resizeStartCompactWidth: CGFloat = 0
     private var resizeSwitchedMode = false
     /// The edges the current resize pulls (empty until the mouse moves).
     private var resizeActiveEdges: ResizeEdges = []
@@ -444,7 +445,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         case .artwork, .compact:
             let base = mode == .artwork
                 ? CGSize(width: panelModel.artworkSide, height: panelModel.artworkSide)
-                : Theme.compactSize
+                : CGSize(width: panelModel.compactWidth, height: Theme.compactSize.height)
             let extra = panelModel.drawer == .none ? 0 : Theme.drawerHeight
             return CGSize(width: base.width, height: base.height + extra)
         case .island:
@@ -593,6 +594,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private func beginResize() {
         resizeStartFrame = panel.frame
         resizeStartSide = panelModel.artworkSide
+        resizeStartCompactWidth = panelModel.compactWidth
         resizeSwitchedMode = false
         resizeActiveEdges = []
     }
@@ -631,7 +633,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             if edges == .top || edges == .bottom, resizeStartSide >= Theme.artworkMiniBreak {
                 let squash = edges == .bottom ? dy : -dy
                 if squash > 0 {
-                    let compact = Theme.compactSize
+                    let compact = CGSize(width: panelModel.compactWidth, height: Theme.compactSize.height)
                     let progress = min(1, squash / max(1, resizeStartSide - compact.height))
                     let width = resizeStartSide + (compact.width - resizeStartSide) * progress
                     let height = resizeStartSide + (compact.height - resizeStartSide) * progress + extra
@@ -686,6 +688,37 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             return true
 
         case .compact:
+            // From a side alone it gets wider or narrower; pulled narrower than its minimum
+            // it resists, and the artwork fades in over it: let go far enough and it's artwork.
+            if !edges.contains(.top), !edges.contains(.bottom) {
+                let range = Theme.compactWidthRange
+                let proposed = resizeStartCompactWidth + (edges.contains(.left) ? -dx : dx)
+                var width: CGFloat
+                var shrink: CGFloat = 0
+                if proposed < range.lowerBound {
+                    let over = range.lowerBound - proposed
+                    width = range.lowerBound - over * 0.3
+                    shrink = min(1, over / Theme.compactShrinkToArtwork)
+                } else if proposed > range.upperBound {
+                    width = range.upperBound + (proposed - range.upperBound) * 0.25
+                } else {
+                    width = proposed
+                }
+                let area = usableArea(for: resizeStartFrame)
+                let room = edges.contains(.left) ? resizeStartFrame.maxX - area.minX : area.maxX - resizeStartFrame.minX
+                width = min(width, room)
+                let extra = panelModel.drawer == .none ? 0 : Theme.drawerHeight
+                let height = Theme.compactSize.height + extra
+                let left = edges.contains(.left) ? resizeStartFrame.maxX - width : resizeStartFrame.minX
+                var transaction = Transaction()
+                transaction.disablesAnimations = true
+                withTransaction(transaction) {
+                    panelModel.compactWidth = width
+                    panelModel.grow = shrink
+                }
+                applyLiveResize(NSRect(x: left, y: resizeStartFrame.maxY - height, width: width, height: height))
+                return true
+            }
             // Compact follows the mouse 1:1 toward the artwork size; the artwork fades in as it grows.
             var growth: CGFloat = 0
             if edges.contains(.bottom) { growth = max(growth, -dy) }
@@ -694,7 +727,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             if edges.contains(.left) { growth = max(growth, -dx) }
             // It stretches into the artwork it was, but never into a mini one.
             let side = max(panelModel.artworkSide, Theme.artworkMiniBreak)
-            let base = Theme.compactSize
+            let base = CGSize(width: panelModel.compactWidth, height: Theme.compactSize.height)
             let extra = panelModel.drawer == .none ? 0 : Theme.drawerHeight
             let progress = min(1, max(0, growth / max(1, side - base.height)))
             let width = base.width + (side - base.width) * progress
@@ -791,6 +824,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let extra = panelModel.drawer == .none ? 0 : Theme.drawerHeight
         switch panelModel.mode {
         case .compact:
+            let sideways = !resizeActiveEdges.contains(.top) && !resizeActiveEdges.contains(.bottom)
+            let range = Theme.compactWidthRange
+            let width = min(max(panelModel.compactWidth, range.lowerBound), range.upperBound)
+            if sideways, panelModel.grow < 0.35 {
+                // Settle inside the range, keeping the edge that wasn't pulled.
+                if width != panelModel.compactWidth { panelModel.compactWidth = width }
+                withAnimation(Theme.smooth) { panelModel.grow = 0 }
+                commitAnchor(for: resizedFrame(size: NSSize(width: width, height: Theme.compactSize.height + extra)))
+                let target = framedRect(for: .compact)
+                if target != panel.frame { animateFrame(to: target) } else { panel.invalidateShadow() }
+                return
+            }
+            if sideways, width != panelModel.compactWidth { panelModel.compactWidth = width }
             if panelModel.grow >= 0.35 {
                 // Past a third of the way: finish the trip into artwork, growing away from
                 // the edge that stayed put.
@@ -808,7 +854,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         case .artwork:
             if panelModel.squash > 0 {
                 if panelModel.squash >= 0.35 {
-                    let compact = Theme.compactSize
+                    let compact = CGSize(width: panelModel.compactWidth, height: Theme.compactSize.height)
                     commitAnchor(for: resizedFrame(size: NSSize(width: compact.width, height: compact.height + extra)))
                     withAnimation(Theme.smooth) { panelModel.squash = 1 }
                     userSwitch(to: .compact)

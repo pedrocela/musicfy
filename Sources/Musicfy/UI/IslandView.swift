@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// Island mode: a 300 × 44 pill under the menu bar. Resting the mouse on it opens it
-/// downward (380 × 160) with the controls.
+/// downward into compact on hover (320 × 136), controls and all.
 ///
 /// The window is always the size of the open Island (plus room for the shadow); what
 /// animates is the pill inside. Clicks pass through the transparent part.
@@ -145,48 +145,16 @@ struct IslandView: View {
 
     // MARK: Open
 
+    /// The same layout as compact on hover, so the two read as one player.
+    @ViewBuilder
     private var expandedContent: some View {
-        VStack(spacing: 0) {
+        Group {
             if player.state == nil {
-                EmptyStateView(player: player, placement: .island)
-                    .frame(maxHeight: .infinity)
+                EmptyStateView(player: player)
             } else {
-                HStack(alignment: .top, spacing: 12) {
-                    thumbnail(side: 56, radius: Theme.thumbRadius)
-                    VStack(alignment: .leading, spacing: 2) {
-                        MarqueeText(text: player.state?.title ?? "", font: Theme.islandOpenTitle, color: Theme.primary, height: 19)
-                        SubtitleLine(player: player, font: Theme.compactSubtitle, height: 16, showsLyric: true)
-                    }
-                    .frame(height: 56)
-                    .id(player.state?.trackKey ?? "")
-                    .transition(.opacity.combined(with: .offset(y: 6)))
-                    .animation(Theme.crossfade, value: player.state?.trackKey)
-                    ToolbarIcons(
-                        player: player,
-                        settings: settings,
-                        panel: panel,
-                        iconSize: 13,
-                        cell: 28,
-                        tint: Color.white.opacity(0.85)
-                    )
-                }
-                ZStack {
-                    if panel.volumeOpen {
-                        VolumeBar(player: player).transition(.opacity)
-                    } else {
-                        TimeBar(player: player).transition(.opacity)
-                    }
-                }
-                .padding(.top, 12)
-                .animation(Theme.fade, value: panel.volumeOpen)
-                TransportRow(player: player, size: .large)
-                    .padding(.top, 4)
-                    .padding(.horizontal, 4)
+                CompactModeView(player: player, settings: settings, panel: panel, inIsland: true)
             }
         }
-        .padding(.top, 16)
-        .padding(.horizontal, 16)
-        .padding(.bottom, 8)
         .frame(width: Theme.islandExpanded.width, height: Theme.islandExpanded.height, alignment: .top)
     }
 

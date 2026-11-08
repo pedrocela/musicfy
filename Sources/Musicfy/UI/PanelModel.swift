@@ -22,6 +22,11 @@ final class PanelModel: ObservableObject {
         didSet { UserDefaults.standard.set(Double(artworkSide), forKey: "artworkSide") }
     }
 
+    /// Compact's width, stretched from its sides (`Theme.compactWidthRange`). Remembered.
+    @Published var compactWidth: CGFloat = PanelModel.savedCompactWidth {
+        didSet { UserDefaults.standard.set(Double(compactWidth), forKey: "compactWidth") }
+    }
+
     /// While the window morphs to or from the Island.
     @Published var morph: Morph?
     /// The artwork or compact view is being dragged over the Island zone (top center).
@@ -40,6 +45,12 @@ final class PanelModel: ObservableObject {
     @Published var artworkDensity: ArtworkDensity = .normal
 
     var actions = PanelActions()
+
+    private static var savedCompactWidth: CGFloat {
+        let saved = CGFloat(UserDefaults.standard.double(forKey: "compactWidth"))
+        let range = Theme.compactWidthRange
+        return min(max(saved, range.lowerBound), range.upperBound)
+    }
 
     private static var savedArtworkSide: CGFloat {
         let saved = UserDefaults.standard.double(forKey: "artworkSide")

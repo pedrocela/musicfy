@@ -3,20 +3,24 @@ import SwiftUI
 /// Compact mode (320 × 136) on a background tinted with the artwork's color.
 /// At rest it's quiet: a big cover, the title and artist, and a hairline of progress.
 /// On hover the times, the transport and the top buttons (over the cover) fade in.
+/// The open Island is this same view with the controls showing, on the Island's own background.
 struct CompactModeView: View {
     @ObservedObject var player: PlayerController
     @ObservedObject var settings: Settings
     @ObservedObject var panel: PanelModel
+    var inIsland = false
 
-    private var showControls: Bool { panel.isHovering || panel.volumeOpen }
+    private var showControls: Bool { inIsland || panel.isHovering || panel.volumeOpen }
 
     var body: some View {
         ZStack {
-            Color(nsColor: player.palette.background)
-                .animation(Theme.crossfade, value: player.palette)
-            LinearGradient(colors: [Color.white.opacity(0.07), .clear], startPoint: .top, endPoint: .center)
-                .allowsHitTesting(false)
-            WindowDragArea(onDoubleClick: panel.actions.toggleArtworkCompact)
+            if !inIsland {
+                Color(nsColor: player.palette.background)
+                    .animation(Theme.crossfade, value: player.palette)
+                LinearGradient(colors: [Color.white.opacity(0.07), .clear], startPoint: .top, endPoint: .center)
+                    .allowsHitTesting(false)
+                WindowDragArea(onDoubleClick: panel.actions.toggleArtworkCompact)
+            }
 
             HStack(alignment: .top, spacing: 12) {
                 CompactCover(player: player, settings: settings, panel: panel, showControls: showControls)
@@ -57,7 +61,8 @@ struct CompactModeView: View {
         ZStack(alignment: .leading) {
             VStack(alignment: .leading, spacing: 2) {
                 MarqueeText(text: player.state?.title ?? "", font: Theme.compactTitle, color: Theme.primary, height: 19)
-                SubtitleLine(player: player, font: Theme.compactSubtitle, height: 16)
+                // In the Island, the Lyrics button swaps the subtitle for the line being sung.
+                SubtitleLine(player: player, font: Theme.compactSubtitle, height: 16, showsLyric: inIsland)
             }
             .id(player.state?.trackKey ?? "")
             .transition(.opacity)
