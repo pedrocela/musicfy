@@ -1,8 +1,8 @@
 import SwiftUI
 
-/// Modo tapa: sólo la tapa; al pasar el mouse aparecen los controles sobre un
-/// vidrio hecho con la misma tapa, difuminada de a poco hacia abajo (como en Music).
-/// Se agranda tirando de un borde; los controles crecen con ella, un poco más despacio.
+/// Artwork mode: just the artwork; on hover the controls appear over glass made from
+/// the artwork itself, progressively blurred toward the bottom (as in Music).
+/// Resizes from its corners and sides; the controls grow with it, a little slower.
 struct ArtworkModeView: View {
     @ObservedObject var player: PlayerController
     @ObservedObject var settings: Settings
@@ -13,7 +13,7 @@ struct ArtworkModeView: View {
     var body: some View {
         GeometryReader { geo in
             let side = geo.size.width
-            // Los controles crecen con la raíz cuadrada del tamaño: a 640 pt, un 41 % más grandes, no el doble.
+            // Controls grow with the square root of the size: at 640 pt they are 41 % larger, not twice.
             let scale = (max(side, 1) / Theme.artworkSize.width).squareRoot()
             ZStack {
                 CrossfadingArtwork(player: player)
@@ -66,11 +66,11 @@ struct ArtworkModeView: View {
                     if player.state?.source.supportsFavorite == true {
                         RoundButton(
                             symbol: player.state?.favorited == true ? "star.fill" : "star",
-                            help: "Favorito",
+                            help: "Favorite",
                             action: { player.toggleFavorite() }
                         )
                     }
-                    RoundButton(symbol: "ellipsis", help: "Más opciones", action: panel.actions.showMenu)
+                    RoundButton(symbol: "ellipsis", help: "More Options", action: panel.actions.showMenu)
                 }
                 TimeBar(player: player, stacked: true)
                     .padding(.top, 8 * s)
@@ -79,13 +79,13 @@ struct ArtworkModeView: View {
             }
             .padding(.horizontal, 18 * s)
             .padding(.bottom, 6 * s)
-            // Una sombra apenas, para que el blanco no se pierda sobre tapas muy claras.
+            // A whisper of shadow so white text holds up on very light artwork.
             .shadow(color: .black.opacity(0.16), radius: 5, y: 1)
         }
     }
 
-    /// Debajo de los controles: la tapa difuminada de a poco (calculada una vez por tapa)
-    /// y un velo que se oscurece hacia abajo para que el blanco se lea sobre tapas claras.
+    /// Under the controls: the progressively blurred artwork (computed once per artwork)
+    /// and a veil that darkens toward the bottom so white reads on light artwork.
     private var glass: some View {
         ZStack {
             ZStack {
@@ -93,7 +93,7 @@ struct ArtworkModeView: View {
                     ArtworkFill(image: glass.progressive)
                         .transition(.opacity)
                 } else {
-                    // Mientras se calcula: un difuminado común.
+                    // While it computes: a plain blur.
                     ArtworkFill(image: player.artwork)
                         .blur(radius: 24, opaque: true)
                         .mask(fallbackMask)

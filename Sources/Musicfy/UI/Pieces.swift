@@ -1,14 +1,14 @@
 import SwiftUI
 
-// MARK: - Chip de la app
+// MARK: - App chip
 
-/// "● Music" / "● Spotify". En vidrio sobre la tapa, o suelto en el compacto.
-/// Al tocarlo se abre la app.
+/// "● Music" / "● Spotify". On glass over the artwork, or plain in compact.
+/// Clicking it brings the app to the front.
 struct SourceChip: View {
     enum Style { case glass, plain }
     let kind: SourceKind
     var style: Style = .glass
-    /// Para el vidrio del modo tapa y para abrir la app.
+    /// For artwork mode's glass and for opening the app.
     @ObservedObject var player: PlayerController
     @Environment(\.uiScale) private var scale
     @State private var hovering = false
@@ -41,19 +41,19 @@ struct SourceChip: View {
             .contentShape(Capsule())
         }
         .buttonStyle(PressableStyle())
-        .help("Abrir \(kind.displayName)")
+        .help("Open \(kind.displayName)")
         .onHover { hovering = $0 }
         .animation(Theme.fade, value: hovering)
         .animation(Theme.crossfade, value: kind)
     }
 }
 
-// MARK: - Tiempo y progreso en una línea
+// MARK: - Time and progress
 
 struct TimeBar: View {
     @ObservedObject var player: PlayerController
     var fill: Color = Theme.barFill
-    /// Los tiempos debajo de la barra, a los costados (modo tapa, como en Music).
+    /// Times below the bar, at each end (artwork mode, as in Music).
     var stacked = false
     @State private var dragFraction: Double?
     @Environment(\.uiScale) private var scale
@@ -98,7 +98,7 @@ struct TimeBar: View {
     }
 }
 
-/// La misma línea, pero para el volumen de la app.
+/// The same line, for the app's volume.
 struct VolumeBar: View {
     @ObservedObject var player: PlayerController
     var fill: Color = Theme.barFill
@@ -123,7 +123,7 @@ struct VolumeBar: View {
     }
 }
 
-// MARK: - Controles de reproducción
+// MARK: - Playback controls
 
 struct TransportRow: View {
     enum Size {
@@ -137,7 +137,7 @@ struct TransportRow: View {
 
     @ObservedObject var player: PlayerController
     var size: Size = .large
-    /// La Isla abierta sólo muestra anterior, play y siguiente, centrados.
+    /// The open Island only shows previous, play and next, centered.
     var showsModes = true
     @Environment(\.uiScale) private var scale
 
@@ -149,26 +149,28 @@ struct TransportRow: View {
                 IconButton(
                     symbol: "shuffle",
                     size: size.side,
-                    tint: state?.shuffle == true ? Theme.primary : Theme.tertiary,
-                    help: "Aleatorio",
+                    tint: state?.shuffle == true ? Theme.primary : Color.white.opacity(0.5),
+                    help: "Shuffle",
+                    active: state?.shuffle == true,
                     action: { player.toggleShuffle() }
                 )
                 Spacer(minLength: 0)
             } else {
                 Spacer(minLength: 0)
             }
-            IconButton(symbol: "backward.fill", size: size.skip, help: "Anterior", action: { player.previous() })
+            IconButton(symbol: "backward.fill", size: size.skip, help: "Previous", action: { player.previous() })
             if showsModes { Spacer(minLength: 0) } else { Spacer().frame(width: 18) }
-            IconButton(symbol: playing ? "pause.fill" : "play.fill", size: size.play, help: playing ? "Pausa" : "Reproducir", action: { player.playPause() })
+            IconButton(symbol: playing ? "pause.fill" : "play.fill", size: size.play, help: "Play/Pause", action: { player.playPause() })
             if showsModes { Spacer(minLength: 0) } else { Spacer().frame(width: 18) }
-            IconButton(symbol: "forward.fill", size: size.skip, help: "Siguiente", action: { player.next() })
+            IconButton(symbol: "forward.fill", size: size.skip, help: "Next", action: { player.next() })
             Spacer(minLength: 0)
             if showsModes {
                 IconButton(
                     symbol: state?.repeatMode == .one ? "repeat.1" : "repeat",
                     size: size.side,
-                    tint: state?.repeatMode == .off || state == nil ? Theme.tertiary : Theme.primary,
-                    help: "Repetir",
+                    tint: state?.repeatMode == .off || state == nil ? Color.white.opacity(0.5) : Theme.primary,
+                    help: "Repeat",
+                    active: state.map { $0.repeatMode != .off } ?? false,
                     action: { player.cycleRepeat() }
                 )
             }
@@ -177,25 +179,25 @@ struct TransportRow: View {
     }
 }
 
-// MARK: - Botones de arriba (letras, volumen, salida, modo)
+// MARK: - Top buttons (lyrics, volume, output, mode)
 
 struct ToolbarIcons: View {
     @ObservedObject var player: PlayerController
     @ObservedObject var settings: Settings
     @ObservedObject var panel: PanelModel
-    /// Botón para cambiar de modo, si corresponde.
+    /// Mode switch button, if any.
     var modeSwitch: DisplayMode?
     var iconSize: CGFloat = 15
     var cell: CGFloat = 32
     var tint: Color = Theme.primary
-    /// En el compacto no entra todo: la salida de audio queda en el menú.
+    /// Compact can't fit everything: audio output stays in the menu.
     var includesOutput = true
     @Environment(\.uiScale) private var scale
 
     var body: some View {
         HStack(spacing: 0) {
             if settings.showLyricsButton {
-                icon(lyricsActive ? "quote.bubble.fill" : "quote.bubble", "Letras", active: lyricsActive) {
+                icon(lyricsActive ? "quote.bubble.fill" : "quote.bubble", "Lyrics", active: lyricsActive) {
                     if panel.mode == .island {
                         player.lyricsVisible.toggle()
                     } else {
@@ -204,20 +206,20 @@ struct ToolbarIcons: View {
                 }
             }
             if settings.showQueueButton, panel.mode != .island {
-                icon("list.bullet", "A continuación", active: panel.drawer == .queue) {
+                icon("list.bullet", "Up Next", active: panel.drawer == .queue) {
                     panel.drawer = panel.drawer == .queue ? .none : .queue
                 }
             }
             if settings.showOutput, includesOutput {
-                icon("airplayaudio", "Salida de audio") { panel.actions.showOutputMenu() }
+                icon("airplayaudio", "Audio Output") { panel.actions.showOutputMenu() }
             }
             if settings.showVolume {
-                icon(volumeSymbol, "Volumen", active: panel.volumeOpen) { panel.volumeOpen.toggle() }
+                icon(volumeSymbol, "Volume", active: panel.volumeOpen) { panel.volumeOpen.toggle() }
             }
             if let modeSwitch {
                 icon(
                     modeSwitch == .compact ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right",
-                    modeSwitch == .compact ? "Modo compacto" : "Modo tapa"
+                    "Change Mode"
                 ) { panel.actions.setMode(modeSwitch) }
             }
         }
@@ -257,8 +259,8 @@ struct ToolbarIcons: View {
     }
 }
 
-/// La cápsula de vidrio de arriba a la derecha (modo tapa). Con el volumen
-/// abierto, la cápsula se estira y muestra la barra en lugar de los íconos.
+/// The glass capsule at the top right (artwork mode). With the volume open,
+/// the capsule stretches and shows the slider instead of the icons.
 struct GlassCapsule: View {
     @ObservedObject var player: PlayerController
     @ObservedObject var settings: Settings
@@ -299,15 +301,15 @@ struct GlassCapsule: View {
     }
 }
 
-// MARK: - Subtítulo o línea de la letra
+// MARK: - Subtitle or lyric line
 
-/// Debajo del título: "Artista — Álbum", o la línea de la letra que está sonando.
+/// Under the title: "Artist — Album", or the lyric line being sung.
 struct SubtitleLine: View {
     @ObservedObject var player: PlayerController
     let font: Font
     let height: CGFloat
     var text: String? = nil
-    /// Sólo la Isla muestra la línea de la letra en lugar del subtítulo.
+    /// Only the Island shows the lyric line instead of the subtitle.
     var showsLyric = false
 
     var body: some View {
@@ -332,7 +334,7 @@ struct SubtitleLine: View {
     }
 }
 
-// MARK: - Panel de letras
+// MARK: - Lyrics panel
 
 struct LyricsPanel: View {
     @ObservedObject var player: PlayerController
@@ -347,7 +349,7 @@ struct LyricsPanel: View {
                 }
                 .allowsHitTesting(false)
             } else if let lyrics = player.lyrics, lyrics.instrumental {
-                PanelMessage(title: "Instrumental", detail: "Este tema no tiene letra.")
+                PanelMessage(title: "Instrumental", detail: "This song has no lyrics.")
             } else if let lyrics = player.lyrics, !lyrics.plain.isEmpty {
                 ScrollView(showsIndicators: false) {
                     Text(lyrics.plain)
@@ -358,7 +360,7 @@ struct LyricsPanel: View {
                         .padding(20)
                 }
             } else {
-                PanelMessage(title: "No hay letra", detail: "No encontramos la letra de este tema.")
+                PanelMessage(title: "No Lyrics", detail: "No lyrics for this song.")
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -426,7 +428,7 @@ private struct SyncedLyrics: View {
     }
 }
 
-// MARK: - Nada sonando y permisos
+// MARK: - Nothing playing and permissions
 
 struct EmptyStateView: View {
     @ObservedObject var player: PlayerController
@@ -436,15 +438,18 @@ struct EmptyStateView: View {
             Image(systemName: "music.note")
                 .font(.system(size: 22, weight: .semibold))
                 .foregroundStyle(Theme.tertiary)
-            Text("Nada sonando")
+            Text("Nothing Playing")
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(Theme.primary)
+            Text(SourceKind.allCases.contains(where: \.isRunning) ? "Play something in Music or Spotify." : "Music and Spotify are closed.")
+                .font(.system(size: 12))
+                .foregroundStyle(Theme.secondary)
             HStack(spacing: 8) {
                 ForEach(player.installedSources) { kind in
                     Button { player.open(kind) } label: {
                         HStack(spacing: 6) {
                             Circle().fill(Theme.sourceColor(kind)).frame(width: 6, height: 6)
-                            Text("Abrir \(kind.displayName)")
+                            Text("Open \(kind.displayName)")
                         }
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(Theme.primary)
@@ -469,7 +474,7 @@ struct PermissionBanner: View {
             Button(action: { player.openAutomationSettings() }) {
                 HStack(spacing: 6) {
                     Image(systemName: "lock.fill")
-                    Text("Falta permiso para \(problem.source.displayName) · Abrir Ajustes")
+                    Text("\(problem.source.displayName) needs permission · Open Settings")
                 }
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(Theme.primary)

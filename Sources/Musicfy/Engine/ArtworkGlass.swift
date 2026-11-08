@@ -2,13 +2,13 @@ import AppKit
 import CoreImage
 import CoreImage.CIFilterBuiltins
 
-/// El vidrio del modo tapa, sacado de la tapa misma, como en Music:
-/// - `progressive`: la tapa con la parte de abajo difuminada de a poco
-///   (nítida arriba, cada vez más borrosa hacia abajo). Va debajo de los controles.
-/// - `frosted`: la tapa entera muy difuminada. Es el fondo de las cápsulas de arriba,
-///   recortado justo donde está cada una, así se ve "a través" de ellas.
+/// Artwork mode's glass, made from the artwork itself, as in Music:
+/// - `progressive`: the artwork with its lower part progressively blurred
+///   (sharp at the top, blurrier toward the bottom). It sits under the controls.
+/// - `frosted`: the whole artwork heavily blurred. It backs the capsules at the top,
+///   cropped right where each one sits, so you see "through" them.
 ///
-/// Se calcula una vez por tapa, fuera del hilo principal.
+/// Computed once per artwork, off the main thread.
 struct ArtworkGlass {
     let progressive: NSImage
     let frosted: NSImage
@@ -19,7 +19,7 @@ struct ArtworkGlass {
         guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return nil }
         var input = CIImage(cgImage: cgImage)
 
-        // Tope de tamaño: alcanza para una tapa de 640 pt en pantalla Retina.
+        // Size cap: enough for a 640 pt artwork on a Retina display.
         let longest = max(input.extent.width, input.extent.height)
         if longest > 1280 {
             let scale = CIFilter.lanczosScaleTransform()
@@ -32,7 +32,7 @@ struct ArtworkGlass {
         let side = max(extent.width, extent.height)
         let clamped = input.clampedToExtent()
 
-        // Máscara: blanco (borroso) abajo, negro (nítido) arriba. En Core Image la y crece hacia arriba.
+        // Mask: white (blurred) at the bottom, black (sharp) at the top. In Core Image y grows upward.
         let gradient = CIFilter.linearGradient()
         gradient.point0 = CGPoint(x: 0, y: extent.minY + extent.height * 0.24)
         gradient.color0 = CIColor(red: 1, green: 1, blue: 1)
@@ -46,7 +46,7 @@ struct ArtworkGlass {
         variable.radius = Float(side * 0.075)
         guard let blurred = variable.outputImage?.cropped(to: extent) else { return nil }
 
-        // La parte borrosa pierde un poco de color y de brillo, como el material de Music.
+        // The blurred part loses a little color and brightness, like Music's material.
         let tone = CIFilter.colorControls()
         tone.inputImage = blurred
         tone.saturation = 0.9

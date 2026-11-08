@@ -1,16 +1,16 @@
 import AppKit
 
-/// Una app de música controlada por AppleScript.
+/// A music app driven by AppleScript.
 ///
-/// Todos los scripts arrancan con `if application id … is running`: así Musicfy
-/// nunca abre Music o Spotify por su cuenta (un `tell` a secas los lanza).
+/// Every script starts with `if application id … is running`, so Musicfy never
+/// launches Music or Spotify on its own (a bare `tell` would).
 protocol MediaSource: AnyObject {
     var kind: SourceKind { get }
 
-    /// Corre en la cola de AppleScript. `nil` = cerrada o detenida.
+    /// Runs on the AppleScript queue. `nil` = closed or stopped.
     func fetchState() -> Result<PlayerState?, AppleScriptRunner.Failure>
 
-    /// Corre en la cola de AppleScript. Tapa incrustada, si la app la da.
+    /// Runs on the AppleScript queue. Embedded artwork, if the app provides it.
     func fetchEmbeddedArtwork() -> NSImage?
 
     func playPause()
@@ -22,7 +22,7 @@ protocol MediaSource: AnyObject {
     func setRepeat(_ mode: RepeatMode)
     func setFavorite(_ on: Bool)
 
-    /// Corre en la cola de AppleScript. `nil` si la app no deja leer la cola.
+    /// Runs on the AppleScript queue. `nil` if the app doesn't expose its queue.
     func fetchQueue() -> QueueInfo?
     func playQueueItem(at index: Int)
 }
@@ -30,7 +30,7 @@ protocol MediaSource: AnyObject {
 extension MediaSource {
     var runner: AppleScriptRunner { .shared }
 
-    /// Envuelve un comando para que no abra la app si está cerrada.
+    /// Wraps a command so it doesn't launch the app when it's closed.
     func command(_ body: String) -> String {
         """
         if application id "\(kind.bundleID)" is running then
@@ -69,7 +69,7 @@ extension MediaSource {
 final class MusicSource: MediaSource {
     let kind = SourceKind.music
 
-    /// Music cambió `loved` por `favorited`. Se elige la que compile en este Mac.
+    /// Music renamed `loved` to `favorited`. Use whichever compiles on this Mac.
     private lazy var favoriteProperty: String = {
         let probe = { (name: String) in
             "tell application id \"com.apple.Music\" to get \(name) of current track"
@@ -150,13 +150,13 @@ final class MusicSource: MediaSource {
 
     func playPause() { runner.fire(command("playpause")) }
     func next() { runner.fire(command("next track")) }
-    // `back track` hace lo mismo que el botón de Music: vuelve al principio o a la anterior.
+    // `back track` does what Music's button does: back to the start, or to the previous song.
     func previous(currentPosition: Double) { runner.fire(command("back track")) }
     func seek(to seconds: Double) {
         runner.fire(command("set player position to \(Self.number(seconds))"), cache: false)
     }
     func setVolume(_ volume: Int) {
-        runner.fire(command("set sound volume to \(min(100, max(0, volume)))"), cache: false)
+        runner.fire(command("set sound volume to \(min(100, max(0, volume)))")) // 101 variants at most: worth caching
     }
     func setShuffle(_ on: Bool) { runner.fire(command("set shuffle enabled to \(on)")) }
     func setRepeat(_ mode: RepeatMode) { runner.fire(command("set song repeat to \(mode.rawValue)")) }
@@ -166,8 +166,8 @@ final class MusicSource: MediaSource {
         }
     }
 
-    /// Los próximos temas de la lista que está sonando. Music no expone su
-    /// "A continuación" real; esto es lo que sigue en el disco o la lista.
+    /// The next songs in the playlist being played. Music doesn't expose its real
+    /// Up Next; this is what follows in the album or playlist.
     private let queueScript = """
         if application id "com.apple.Music" is not running then return {}
         tell application id "com.apple.Music"
@@ -215,7 +215,7 @@ final class MusicSource: MediaSource {
         runner.fire(command("play track \(index) of current playlist"), cache: false)
     }
 
-    /// AppleScript espera punto decimal, sin importar el idioma del sistema.
+    /// AppleScript wants a decimal point, whatever the system's language.
     static func number(_ value: Double) -> String {
         String(format: "%.2f", locale: Locale(identifier: "en_US_POSIX"), value)
     }
@@ -266,12 +266,12 @@ final class SpotifySource: MediaSource {
         return runner.run(stateScript).map { parse($0) }
     }
 
-    /// Spotify no da la imagen, da una URL (la baja el controlador).
+    /// Spotify gives a URL, not the image (the controller downloads it).
     func fetchEmbeddedArtwork() -> NSImage? { nil }
 
     func playPause() { runner.fire(command("playpause")) }
     func next() { runner.fire(command("next track")) }
-    // Spotify salta directo a la anterior; la app hace lo de Music: pasados 3 s, vuelve al principio.
+    // Spotify jumps straight to the previous song; this does what Music does: after 3 s, restart the song.
     func previous(currentPosition: Double) {
         if currentPosition > 3 {
             seek(to: 0)
@@ -283,14 +283,14 @@ final class SpotifySource: MediaSource {
         runner.fire(command("set player position to \(MusicSource.number(seconds))"), cache: false)
     }
     func setVolume(_ volume: Int) {
-        runner.fire(command("set sound volume to \(min(100, max(0, volume)))"), cache: false)
+        runner.fire(command("set sound volume to \(min(100, max(0, volume)))")) // 101 variants at most: worth caching
     }
     func setShuffle(_ on: Bool) { runner.fire(command("set shuffling to \(on)")) }
-    // Spotify sólo tiene repetir sí o no (no distingue "una" de "todas").
+    // Spotify only has repeat on or off (no "one" versus "all").
     func setRepeat(_ mode: RepeatMode) { runner.fire(command("set repeating to \(mode != .off)")) }
     func setFavorite(_ on: Bool) {}
 
-    /// Spotify no expone la cola por AppleScript.
+    /// Spotify doesn't expose its queue through AppleScript.
     func fetchQueue() -> QueueInfo? { nil }
     func playQueueItem(at index: Int) {}
 }

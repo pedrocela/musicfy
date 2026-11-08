@@ -1,7 +1,7 @@
 #!/bin/bash
-# Compila Musicfy y arma build/Musicfy.app.
-#   ./build.sh            compila
-#   ./build.sh --install  compila, la copia a /Applications y la abre
+# Builds Musicfy and assembles build/Musicfy.app.
+#   ./build.sh            build
+#   ./build.sh --install  build, copy to /Applications and open it
 set -euo pipefail
 cd "$(dirname "$0")"
 
@@ -21,9 +21,9 @@ if [ ! -f build/AppIcon.icns ]; then
 fi
 cp build/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 
-# Firma local (sin cuenta de desarrollador). Alcanza para correrla en este Mac.
+# Local ad-hoc signature (no developer account). Enough to run it on this Mac.
 codesign --force --sign - --identifier com.pedrocela.musicfy "$APP"
-echo "Listo: $APP"
+echo "Done: $APP"
 
 if [[ "${1:-}" == "--install" ]]; then
   pkill -x Musicfy || true
@@ -31,5 +31,5 @@ if [[ "${1:-}" == "--install" ]]; then
   rm -rf /Applications/Musicfy.app
   cp -R "$APP" /Applications/
   open /Applications/Musicfy.app
-  echo "Instalada en /Applications y abierta."
+  echo "Installed in /Applications and opened."
 fi

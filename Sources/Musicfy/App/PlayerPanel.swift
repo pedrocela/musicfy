@@ -1,8 +1,8 @@
 import AppKit
 import SwiftUI
 
-/// Ventana sin marco que flota sobre todo: todas las apps, todos los escritorios
-/// y también sobre apps en pantalla completa. No le roba el foco a nadie.
+/// Borderless window that floats above everything: every app, every Space and
+/// full-screen apps too. It never steals focus.
 final class PlayerPanel: NSPanel {
     init() {
         super.init(
@@ -26,12 +26,12 @@ final class PlayerPanel: NSPanel {
         becomesKeyOnlyIfNeeded = true
     }
 
-    // Puede tomar el teclado sin activar la app (para los menús y las barras).
+    // Can take the keyboard without activating the app (for menus and sliders).
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { false }
 }
 
-/// El primer clic sobre el player ya cuenta, aunque la ventana no tenga el foco.
+/// The first click on the player counts, even when the window isn't focused.
 final class FirstMouseHostingView<Content: View>: NSHostingView<Content> {
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 }

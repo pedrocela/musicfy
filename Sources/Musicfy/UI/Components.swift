@@ -1,10 +1,10 @@
 import AppKit
 import SwiftUI
 
-// MARK: - Fondo translúcido
+// MARK: - Translucent background
 
-/// Vidrio oscuro de macOS, mezclado con lo que hay detrás de la ventana.
-/// Se recorta con una máscara propia: el recorte de SwiftUI no siempre llega a una vista de AppKit.
+/// macOS dark glass, blended with whatever is behind the window.
+/// Clipped with its own mask: SwiftUI's clip doesn't always reach an AppKit view.
 struct VisualEffectBackground: NSViewRepresentable {
     var material: NSVisualEffectView.Material = .hudWindow
     var cornerRadius: CGFloat = 16
@@ -35,10 +35,10 @@ struct VisualEffectBackground: NSViewRepresentable {
     }
 }
 
-// MARK: - Arrastrar la ventana
+// MARK: - Dragging the window
 
-/// Zona vacía desde la que se arrastra el player. Doble clic: cambia de modo.
-/// Clic derecho: el menú. Va debajo de los controles, que reciben su clic primero.
+/// Empty area to drag the player from. Double click: switch mode.
+/// Right click: the menu. Sits below the controls, which get their clicks first.
 struct WindowDragArea: NSViewRepresentable {
     var onDoubleClick: () -> Void = {}
     var onRightClick: (() -> Void)? = nil
@@ -53,7 +53,7 @@ struct WindowDragArea: NSViewRepresentable {
             if event.clickCount == 2 {
                 onDoubleClick()
             } else {
-                // Arrastrar la ventana; si se suelta arriba al centro, se vuelve Isla.
+                // Drag the window; dropped at the top center, it becomes the Island.
                 AppDelegate.shared?.windowDragBegan()
                 window?.performDrag(with: event)
                 if NSEvent.pressedMouseButtons & 1 == 0 { AppDelegate.shared?.windowDragEnded() }
@@ -81,9 +81,9 @@ struct WindowDragArea: NSViewRepresentable {
     }
 }
 
-// MARK: - Botones
+// MARK: - Buttons
 
-/// Se achica un poco al apretar, con rebote.
+/// Shrinks a little when pressed, with a bounce.
 struct PressableStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
@@ -93,12 +93,14 @@ struct PressableStyle: ButtonStyle {
     }
 }
 
-/// Ícono suelto (controles de reproducción).
+/// Bare icon (playback controls).
 struct IconButton: View {
     let symbol: String
     var size: CGFloat = 20
     var tint: Color = Theme.primary
     var help: String = ""
+    /// Toggles (shuffle, repeat): when on, the icon sits on a light rounded chip, as in Music.
+    var active: Bool? = nil
     let action: () -> Void
     @Environment(\.uiScale) private var scale
 
@@ -108,6 +110,11 @@ struct IconButton: View {
                 .font(.system(size: size * scale, weight: .semibold))
                 .foregroundStyle(tint)
                 .contentTransition(.symbolEffect(.replace))
+                .frame(width: (size + 10) * scale, height: (size + 8) * scale)
+                .background(
+                    RoundedRectangle(cornerRadius: 7 * scale, style: .continuous)
+                        .fill(Color.white.opacity(active == true ? 0.22 : 0))
+                )
                 .frame(width: (size + 18) * scale, height: (size + 14) * scale)
                 .contentShape(Rectangle())
         }
@@ -115,10 +122,11 @@ struct IconButton: View {
         .help(help)
         .animation(Theme.fade, value: symbol)
         .animation(Theme.fade, value: tint)
+        .animation(Theme.press, value: active)
     }
 }
 
-/// Botón redondo sobre vidrio (estrella, tres puntos).
+/// Round button on glass (star, ellipsis).
 struct RoundButton: View {
     let symbol: String
     var tint: Color = Theme.primary
@@ -143,16 +151,16 @@ struct RoundButton: View {
     }
 }
 
-// MARK: - Barra de progreso / volumen
+// MARK: - Progress / volume bar
 
-/// Barra fina que se engrosa al tocarla. Se arrastra o se hace clic en cualquier punto.
+/// Thin bar that thickens when touched. Drag it or click anywhere on it.
 struct ScrubBar: View {
     let fraction: Double
     var fill: Color = Theme.barFill
     var track: Color = Theme.barTrack
     var onChange: (Double) -> Void = { _ in }
     var onCommit: (Double) -> Void = { _ in }
-    /// La barra de progreso avanza en tramos de 0,25 s; con esto el avance se ve continuo.
+    /// Progress updates every 0.25 s; this makes the fill move continuously.
     var smoothFill = true
     @State private var active = false
     @Environment(\.uiScale) private var scale
@@ -190,22 +198,22 @@ struct ScrubBar: View {
     }
 }
 
-// MARK: - Texto que se desliza
+// MARK: - Scrolling text
 
 private struct WidthKey: PreferenceKey {
     static var defaultValue: CGFloat = 0
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = max(value, nextValue()) }
 }
 
-/// Si el texto no entra, se desliza despacio de punta a punta, como en Music.
+/// If the text doesn't fit, it slowly scrolls end to end, as in Music.
 struct MarqueeText: View {
     let text: String
     let font: Font
     let color: Color
     let height: CGFloat
-    /// Ancho del fundido de la derecha cuando el texto no entra. `nil`: un 8 % del ancho.
+    /// Width of the right fade when the text doesn't fit. `nil`: 8 % of the width.
     var trailingFade: CGFloat? = nil
-    /// Si es `false`, el texto largo no se desliza: queda cortado con el fundido.
+    /// When `false`, long text doesn't scroll: it's cut off with the fade.
     var scrolls = true
 
     @State private var textWidth: CGFloat = 0
@@ -225,8 +233,8 @@ struct MarqueeText: View {
             })
             .onPreferenceChange(WidthKey.self) { textWidth = $0 }
             .offset(x: offset)
-            // minWidth 0: sin esto el marco toma el ancho del texto entero y empuja
-            // todo el player hacia los costados.
+            // minWidth 0: without it the frame takes the full text width and pushes
+            // the whole player out sideways.
             .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
             .frame(height: height)
             .background(GeometryReader { proxy in
@@ -241,7 +249,7 @@ struct MarqueeText: View {
             }
     }
 
-    /// Bordes que se desvanecen sólo cuando hay texto cortado de ese lado.
+    /// Edges fade only when text is cut off on that side.
     private var edgeFade: some View {
         let fadeStart = trailingFade.map { containerWidth > 0 ? max(0.5, 1 - $0 / containerWidth) : 0.85 } ?? 0.92
         return LinearGradient(
@@ -260,7 +268,7 @@ struct MarqueeText: View {
         offset = 0
         let distance = overflow
         guard scrolls, distance > 1 else { return }
-        let travel = Double(distance) / 28 // puntos por segundo
+        let travel = Double(distance) / 28 // points per second
         while !Task.isCancelled {
             try? await Task.sleep(for: .seconds(2.5))
             if Task.isCancelled { return }
@@ -273,9 +281,9 @@ struct MarqueeText: View {
     }
 }
 
-// MARK: - Tapa
+// MARK: - Artwork
 
-/// La tapa llenando su lugar, o un degradé con una nota si no hay.
+/// The artwork filling its frame, or a gradient with a note when there's none.
 struct ArtworkFill: View {
     let image: NSImage?
 
@@ -304,13 +312,13 @@ struct ArtworkFill: View {
     }
 }
 
-/// Nombre del espacio de coordenadas de la tapa, para ubicar el vidrio de las cápsulas.
+/// Name of the artwork's coordinate space, to line up the capsules' glass.
 enum ArtworkSpace {
     static let name = "artwork"
 }
 
-/// Vidrio de verdad sobre la tapa: muestra la tapa difuminada que queda justo detrás
-/// de la forma, con un velo oscuro y un filo de luz arriba. Sólo sirve dentro del modo tapa.
+/// Real glass over the artwork: shows the blurred artwork right behind the shape,
+/// with a dark veil and a rim of light on top. Only meaningful inside artwork mode.
 struct GlassBackdrop<S: InsettableShape>: View {
     @ObservedObject var player: PlayerController
     let shape: S
@@ -342,7 +350,7 @@ struct GlassBackdrop<S: InsettableShape>: View {
     }
 }
 
-/// La tapa con fundido cruzado cuando cambia la canción.
+/// The artwork, crossfading when the song changes.
 struct CrossfadingArtwork: View {
     @ObservedObject var player: PlayerController
 
@@ -356,7 +364,7 @@ struct CrossfadingArtwork: View {
     }
 }
 
-// MARK: - Formato
+// MARK: - Formatting
 
 enum TimeText {
     static func format(_ seconds: Double) -> String {

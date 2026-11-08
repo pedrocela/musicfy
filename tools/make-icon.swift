@@ -1,5 +1,5 @@
-// Dibuja el ícono de Musicfy y lo guarda como iconset.
-// Uso: swift tools/make-icon.swift build/AppIcon.iconset
+// Draws the Musicfy icon and saves it as an iconset.
+// Usage: swift tools/make-icon.swift build/AppIcon.iconset
 import AppKit
 
 let output = CommandLine.arguments.dropFirst().first ?? "AppIcon.iconset"
@@ -15,7 +15,7 @@ func render(_ side: Int) -> Data? {
     NSGraphicsContext.saveGraphicsState()
     NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
 
-    // Forma de ícono de macOS: cuadrado redondeado con margen.
+    // macOS icon shape: rounded square with margin.
     let inset = size * 0.098
     let rect = NSRect(x: inset, y: inset, width: size - inset * 2, height: size - inset * 2)
     let radius = rect.width * 0.225
@@ -31,7 +31,7 @@ func render(_ side: Int) -> Data? {
     shape.fill()
     NSGraphicsContext.current?.restoreGraphicsState()
 
-    // Brillo cálido como una tapa iluminada.
+    // Warm glow, like lit artwork.
     NSGraphicsContext.current?.saveGraphicsState()
     shape.addClip()
     let glow = NSGradient(colors: [
@@ -42,14 +42,14 @@ func render(_ side: Int) -> Data? {
     ], atLocations: [0, 0.38, 0.72, 1], colorSpace: .sRGB)
     glow?.draw(in: shape, relativeCenterPosition: NSPoint(x: 0, y: 0.25))
 
-    // Vidrio abajo, como en el player.
+    // Glass at the bottom, as in the player.
     let glass = NSRect(x: rect.minX, y: rect.minY, width: rect.width, height: rect.height * 0.36)
     NSGradient(colors: [
         NSColor.black.withAlphaComponent(0.0),
         NSColor.black.withAlphaComponent(0.45),
     ])?.draw(in: glass, angle: -90)
 
-    // Barra de progreso.
+    // Progress bar.
     let barY = rect.minY + rect.height * 0.17
     let barX = rect.minX + rect.width * 0.16
     let barW = rect.width * 0.68
@@ -60,7 +60,7 @@ func render(_ side: Int) -> Data? {
     NSBezierPath(roundedRect: NSRect(x: barX, y: barY, width: barW * 0.38, height: barH), xRadius: barH / 2, yRadius: barH / 2).fill()
     NSGraphicsContext.current?.restoreGraphicsState()
 
-    // Nota musical.
+    // Music note.
     let config = NSImage.SymbolConfiguration(pointSize: size * 0.36, weight: .semibold)
         .applying(NSImage.SymbolConfiguration(paletteColors: [.white]))
     if let note = NSImage(systemSymbolName: "music.note", accessibilityDescription: nil)?.withSymbolConfiguration(config) {
@@ -81,4 +81,4 @@ for base in [16, 32, 128, 256, 512] {
         }
     }
 }
-print("Ícono listo en \(output)")
+print("Icon ready at \(output)")

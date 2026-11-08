@@ -1,6 +1,6 @@
 import AppKit
 
-/// Las dos apps que Musicfy sabe leer y controlar.
+/// The two apps Musicfy can read and control.
 enum SourceKind: String, CaseIterable, Identifiable {
     case music
     case spotify
@@ -29,7 +29,7 @@ enum SourceKind: String, CaseIterable, Identifiable {
         !NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).isEmpty
     }
 
-    /// Spotify no expone "me gusta" por AppleScript; Music sí (favorito).
+    /// Spotify doesn't expose "like" through AppleScript; Music does (favorite).
     var supportsFavorite: Bool { self == .music }
 }
 
@@ -38,23 +38,23 @@ enum RepeatMode: String {
 }
 
 enum DisplayMode: String, CaseIterable {
-    /// La tapa grande, con los controles encima al pasar el mouse.
+    /// The large artwork, with controls on hover.
     case artwork
-    /// La tira compacta: miniatura, título y controles.
+    /// The compact strip: thumbnail, title and controls.
     case compact
-    /// Una cápsula arriba al centro de la pantalla que se abre al pasar el mouse.
+    /// A pill at the top center of the screen that opens on hover.
     case island
 
     var label: String {
         switch self {
-        case .artwork: return "Tapa"
-        case .compact: return "Compacto"
-        case .island: return "Isla"
+        case .artwork: return "Artwork"
+        case .compact: return "Compact"
+        case .island: return "Island"
         }
     }
 }
 
-/// Lo que está sonando en una app, tal como lo devuelve su AppleScript.
+/// What an app is playing, as its AppleScript returns it.
 struct PlayerState: Equatable {
     var source: SourceKind
     var isPlaying: Bool
@@ -74,21 +74,21 @@ struct PlayerState: Equatable {
         [artist, album].filter { !$0.isEmpty }.joined(separator: " — ")
     }
 
-    /// Identifica la canción para saber cuándo hay que traer otra tapa o letra.
+    /// Identifies the song, to know when to fetch new artwork or lyrics.
     var trackKey: String {
         trackID.isEmpty ? "\(source.rawValue)|\(title)|\(artist)|\(album)" : "\(source.rawValue)|\(trackID)"
     }
 }
 
-/// Por qué una app no se pudo leer.
+/// Why an app couldn't be read.
 enum SourceProblem: Equatable {
     case notAuthorized
 }
 
-/// Lo que sigue en la lista que está sonando (sólo Music lo deja leer).
+/// What follows in the playing list (only Music lets us read it).
 struct QueueInfo: Equatable {
     struct Item: Equatable, Identifiable {
-        /// Posición en la lista de Music (para mandarla a sonar).
+        /// Position in Music's list (to play it).
         let index: Int
         let title: String
         let artist: String

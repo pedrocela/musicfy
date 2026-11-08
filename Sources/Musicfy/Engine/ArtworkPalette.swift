@@ -1,7 +1,7 @@
 import AppKit
 
-/// Colores sacados de la tapa: un fondo oscuro para el modo compacto
-/// y un acento vivo para la Isla.
+/// Colors taken from the artwork: a dark background for compact mode
+/// and a vivid accent for the Island.
 struct ArtworkPalette: Equatable {
     var background: NSColor
     var accent: NSColor
@@ -11,8 +11,8 @@ struct ArtworkPalette: Equatable {
         accent: NSColor(srgbRed: 0.92, green: 0.92, blue: 0.94, alpha: 1)
     )
 
-    /// Promedio de la tapa reducida a 16 × 16, con más peso para los píxeles
-    /// con color: así una tapa negra con un rostro naranja da naranja, no negro.
+    /// Average of the artwork scaled to 16 × 16, weighting colorful pixels more:
+    /// a black cover with an orange face gives orange, not black.
     static func from(_ image: NSImage) -> ArtworkPalette {
         guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return .neutral }
         let side = 16

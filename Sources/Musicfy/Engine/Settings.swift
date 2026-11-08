@@ -1,29 +1,29 @@
 import Foundation
 
 enum IdleBehavior: String, CaseIterable {
-    /// Queda visible, en pausa, con la última canción.
+    /// Stays visible, paused, with the last song.
     case stay
-    /// Se esconde a los 30 s sin música y vuelve cuando algo suena.
+    /// Hides after 30 s without music and comes back when something plays.
     case hide
-    /// Pasa a la tira compacta y vuelve a la tapa cuando arranca la música.
+    /// Shrinks to compact and returns to artwork when music starts.
     case compact
 
     var label: String {
         switch self {
-        case .stay: return "Quedarse a la vista"
-        case .hide: return "Esconderse solo"
-        case .compact: return "Pasar a compacto"
+        case .stay: return "Stay Visible"
+        case .hide: return "Hide Automatically"
+        case .compact: return "Shrink to Compact"
         }
     }
 }
 
-/// Preferencias del usuario, guardadas en UserDefaults.
+/// The user's preferences, stored in UserDefaults.
 @MainActor
 final class Settings: ObservableObject {
     private let defaults = UserDefaults.standard
 
     @Published var mode: DisplayMode { didSet { defaults.set(mode.rawValue, forKey: "mode") } }
-    /// `nil` = automático: la última app que empezó a sonar.
+    /// `nil` = automatic: the last app that started playing.
     @Published var forcedSource: SourceKind? { didSet { defaults.set(forcedSource?.rawValue, forKey: "forcedSource") } }
     @Published var showVolume: Bool { didSet { defaults.set(showVolume, forKey: "showVolume") } }
     @Published var showOutput: Bool { didSet { defaults.set(showOutput, forKey: "showOutput") } }

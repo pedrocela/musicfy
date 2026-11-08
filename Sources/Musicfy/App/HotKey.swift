@@ -1,13 +1,13 @@
 import Carbon.HIToolbox
 import Foundation
 
-/// Atajo de teclado que funciona desde cualquier app (sin pedir permisos de accesibilidad).
+/// Keyboard shortcut that works from any app (no Accessibility permission needed).
 final class HotKey {
     private var ref: EventHotKeyRef?
     private static var handlers: [UInt32: () -> Void] = [:]
     private static var installed = false
 
-    /// `keyCode` es la tecla física (kVK_…); `modifiers`, los de Carbon (cmdKey, optionKey…).
+    /// `keyCode` is the physical key (kVK_…); `modifiers` are Carbon's (cmdKey, optionKey…).
     init?(keyCode: Int, modifiers: Int, id: UInt32, handler: @escaping () -> Void) {
         Self.installHandler()
         Self.handlers[id] = handler

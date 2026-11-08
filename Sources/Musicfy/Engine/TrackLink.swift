@@ -1,7 +1,7 @@
 import Foundation
 
-/// El enlace público del tema que suena, para copiarlo.
-/// Spotify da el id (spotify:track:…); para Music se busca en el catálogo de Apple.
+/// The public link of the playing song, to copy it.
+/// Spotify gives the id (spotify:track:…); for Music it's looked up in Apple's catalog.
 enum TrackLink {
     static func url(for state: PlayerState) async -> URL? {
         switch state.source {

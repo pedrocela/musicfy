@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
 	<key>CFBundleDevelopmentRegion</key>
-	<string>es</string>
+	<string>en</string>
 	<key>CFBundleDisplayName</key>
 	<string>Musicfy</string>
 	<key>CFBundleExecutable</key>
@@ -29,7 +29,7 @@
 	<key>LSUIElement</key>
 	<true/>
 	<key>NSAppleEventsUsageDescription</key>
-	<string>Musicfy lee qué está sonando en Music y Spotify y los controla desde el player flotante.</string>
+	<string>Musicfy reads what Music and Spotify are playing and controls them from its floating player.</string>
 	<key>NSHighResolutionCapable</key>
 	<true/>
 </dict>

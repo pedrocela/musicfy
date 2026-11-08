@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// "A continuación": lo que sigue en el disco o la lista que está sonando en Music.
+/// "Up Next": what follows in the album or playlist playing in Music.
 struct QueuePanel: View {
     @ObservedObject var player: PlayerController
 
@@ -8,15 +8,15 @@ struct QueuePanel: View {
         Group {
             if player.state?.source == .spotify {
                 PanelMessage(
-                    title: "Cola no disponible",
-                    detail: "Spotify no deja ver la cola desde otras apps."
+                    title: "Up Next Unavailable",
+                    detail: "Spotify doesn't share its queue with other apps."
                 )
             } else if player.queueLoading {
                 ProgressView().controlSize(.small).tint(.white)
             } else if let queue = player.queue, !queue.items.isEmpty {
                 list(queue)
             } else {
-                PanelMessage(title: "No sigue nada", detail: "Es el último tema de la lista.")
+                PanelMessage(title: "Nothing Up Next", detail: "This is the last song in the list.")
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -25,11 +25,11 @@ struct QueuePanel: View {
     private func list(_ queue: QueueInfo) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             VStack(alignment: .leading, spacing: 2) {
-                Text("A continuación")
+                Text("Up Next")
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(Theme.primary)
                 if !queue.playlistName.isEmpty {
-                    Text("De \(queue.playlistName)")
+                    Text("From \(queue.playlistName)")
                         .font(.system(size: 13))
                         .foregroundStyle(Color.white.opacity(0.55))
                         .lineLimit(1)
@@ -88,7 +88,7 @@ private struct QueueRow: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(RowStyle())
-        .help("Reproducir")
+        .help("Play")
     }
 }
 
@@ -100,7 +100,7 @@ private struct RowStyle: ButtonStyle {
     }
 }
 
-/// Miniatura de cada tema: la tapa actual si es del mismo disco, si no la del catálogo.
+/// Each song's thumbnail: the current artwork if it's the same album, otherwise the catalog's.
 private struct QueueThumb: View {
     @ObservedObject var player: PlayerController
     let item: QueueInfo.Item

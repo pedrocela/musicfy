@@ -1,33 +1,37 @@
 import SwiftUI
 
-/// Estado de la ventana (no de la música): modo visible, mouse encima, volumen abierto.
+/// Window state (not the music's): visible mode, hover, volume open, transitions.
 @MainActor
 final class PanelModel: ObservableObject {
-    /// El modo que se ve ahora. Puede diferir del elegido en Ajustes
-    /// (por ejemplo, la tapa pasa a compacto cuando no suena nada).
+    /// The mode on screen. It can differ from the one in Settings
+    /// (for example, artwork turns into compact while nothing plays).
     @Published var mode: DisplayMode = .artwork
     @Published var isHovering = false
     @Published var volumeOpen = false
     @Published var islandExpanded = false
-    /// Panel que se abre debajo del player (tapa y compacto), como en Music.
+    /// Panel that opens below the player (artwork and compact), as in Music.
     @Published var drawer: Drawer = .none
-    /// Dónde se pega la Isla en el borde de arriba.
+    /// Where the Island sticks along the top edge.
     @Published var islandAlignment: IslandAlignment =
         IslandAlignment(rawValue: UserDefaults.standard.string(forKey: "islandAlignment") ?? "") ?? .center {
         didSet { UserDefaults.standard.set(islandAlignment.rawValue, forKey: "islandAlignment") }
     }
 
-    /// Lado del modo tapa, que se agranda tirando de un borde. Se recuerda.
+    /// Artwork mode side, resized by pulling a corner or side. Remembered.
     @Published var artworkSide: CGFloat = PanelModel.savedArtworkSide {
         didSet { UserDefaults.standard.set(Double(artworkSide), forKey: "artworkSide") }
     }
 
-    /// Cambio de modo con fundido: la vista vieja se achica y se va, la nueva llega con un resorte.
-    @Published var swapOut = false
-    /// Se está arrastrando la tapa o el compacto sobre la zona de la Isla (arriba al centro).
+    /// While the window morphs to or from the Island.
+    @Published var morph: Morph?
+    /// The artwork or compact view is being dragged over the Island zone (top center).
     @Published var islandHint = false
-    /// La Isla se está tirando hacia abajo: de 0 a 1, cuánto falta para que se vuelva tapa.
+    /// The Island is being pulled down: 0 to 1, how close it is to becoming the artwork.
     @Published var islandPull: CGFloat = 0
+    /// Compact being stretched into artwork: 0 to 1.
+    @Published var grow: CGFloat = 0
+    /// Artwork being squashed into compact from its top or bottom edge: 0 to 1.
+    @Published var squash: CGFloat = 0
 
     var actions = PanelActions()
 
@@ -36,6 +40,17 @@ final class PanelModel: ObservableObject {
         let side = saved > 0 ? CGFloat(saved) : Theme.artworkSize.width
         return min(max(side, Theme.artworkSideRange.lowerBound), Theme.artworkSideRange.upperBound)
     }
+}
+
+/// What the morph starts from (or ends in) on the panel side.
+enum MorphLook: Equatable {
+    case artwork, compact
+}
+
+/// 0 is the panel (artwork or compact), 1 is the closed Island.
+struct Morph: Equatable {
+    var look: MorphLook
+    var progress: CGFloat
 }
 
 enum IslandAlignment: String {
@@ -54,7 +69,7 @@ enum Drawer: Equatable {
     case none, lyrics, queue
 }
 
-/// Lo que la interfaz le pide a la app; lo resuelve el AppDelegate.
+/// What the UI asks of the app; the AppDelegate handles it.
 struct PanelActions {
     var setMode: (DisplayMode) -> Void = { _ in }
     var toggleArtworkCompact: () -> Void = {}

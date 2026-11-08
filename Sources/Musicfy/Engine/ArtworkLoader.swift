@@ -1,7 +1,7 @@
 import AppKit
 
-/// Baja tapas por URL (Spotify) o, si Music no la da, la busca en el catálogo
-/// público de iTunes por artista y álbum. Guarda las últimas en memoria.
+/// Downloads artwork by URL (Spotify) or, when Music doesn't provide it, looks it up in
+/// the public iTunes catalog by artist and album. Keeps the latest ones in memory.
 final class ArtworkLoader {
     static let shared = ArtworkLoader()
 
@@ -25,7 +25,7 @@ final class ArtworkLoader {
         return NSImage(data: data)
     }
 
-    /// Tapa en 600 px desde la búsqueda de iTunes (sin cuenta ni clave).
+    /// 600 px artwork from the iTunes search (no account or key needed).
     func searchCatalog(artist: String, album: String, title: String) async -> NSImage? {
         let term = [artist, album.isEmpty ? title : album].filter { !$0.isEmpty }.joined(separator: " ")
         guard !term.isEmpty else { return nil }

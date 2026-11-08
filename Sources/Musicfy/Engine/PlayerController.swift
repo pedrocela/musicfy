@@ -1,8 +1,8 @@
 import AppKit
 import Combine
 
-/// El corazón de Musicfy: lee las dos apps, decide cuál mostrar y manda los comandos.
-/// La interfaz sólo mira lo que publica esta clase y llama a sus métodos.
+/// The heart of Musicfy: reads both apps, decides which one to show and sends commands.
+/// The UI only watches what this class publishes and calls its methods.
 @MainActor
 final class PlayerController: ObservableObject {
     struct Problem: Equatable {
@@ -11,7 +11,7 @@ final class PlayerController: ObservableObject {
     }
 
     @Published private(set) var state: PlayerState?
-    /// Momento en que se leyó `state.position`; la posición en vivo se interpola desde acá.
+    /// When `state.position` was read; the live position is interpolated from here.
     @Published private(set) var positionDate = Date()
     @Published private(set) var artwork: NSImage? {
         didSet {
@@ -20,16 +20,16 @@ final class PlayerController: ObservableObject {
             makeGlass()
         }
     }
-    /// El vidrio del modo tapa, hecho con la tapa actual. `nil` mientras se calcula.
+    /// Artwork mode's glass, made from the current artwork. `nil` while computing.
     @Published private(set) var glass: ArtworkGlass?
-    /// Colores de la tapa actual (fondo del compacto, acento de la Isla).
+    /// The current artwork's colors (compact background, Island accent).
     @Published private(set) var palette = ArtworkPalette.neutral
-    /// Cambia con cada tapa nueva: la interfaz lo usa para el fundido cruzado.
+    /// Changes with every new artwork: the UI uses it for the crossfade.
     @Published private(set) var artworkToken = 0
     @Published private(set) var lyrics: Lyrics?
     @Published private(set) var lyricsLoading = false
     @Published private(set) var problem: Problem?
-    /// Cola de Music. `nil` con Spotify o si Music no la da.
+    /// Music's queue. `nil` with Spotify or if Music doesn't provide it.
     @Published private(set) var queue: QueueInfo?
     @Published private(set) var queueLoading = false
     @Published var queueVisible = false {
@@ -50,12 +50,14 @@ final class PlayerController: ObservableObject {
     private var timer: Timer?
     private var refreshing = false
     private var refreshAgain = false
-    /// Sube con cada comando: una lectura que empezó antes se descarta (traería el estado viejo).
+    /// Bumped by every command: a read that started earlier is dropped (it would bring the old state).
     private var generation = 0
     private var artworkKey: String?
     private var lyricsKey: String?
     private var queueKey: String?
     private var pendingVolume: Int?
+    private var volumeThrottled = false
+    private var volumeRefresh: DispatchWorkItem?
     private var observers: [NSObjectProtocol] = []
     private var cancellables: Set<AnyCancellable> = []
 
@@ -67,7 +69,7 @@ final class PlayerController: ObservableObject {
             .store(in: &cancellables)
     }
 
-    // MARK: - Lectura
+    // MARK: - Reading
 
     func start() {
         let center = DistributedNotificationCenter.default()
@@ -144,7 +146,7 @@ final class PlayerController: ObservableObject {
         chooseActive()
     }
 
-    /// Automático: la última que empezó a sonar. Si nada suena, se queda con la que estaba.
+    /// Automatic: the last one that started playing. If nothing plays, keep the current one.
     private func chooseActive() {
         let chosen: PlayerState?
         if let forced = settings.forcedSource {
@@ -176,7 +178,7 @@ final class PlayerController: ObservableObject {
         if queueVisible, trackChanged { loadQueue() }
     }
 
-    /// Posición interpolada: el script se lee cada 1,5 s pero la barra avanza fluida.
+    /// Interpolated position: the script is read every 1.5 s but the bar moves smoothly.
     func position(at date: Date = Date()) -> Double {
         guard let state else { return 0 }
         let elapsed = state.isPlaying ? date.timeIntervalSince(positionDate) : 0
@@ -184,7 +186,7 @@ final class PlayerController: ObservableObject {
         return state.duration > 0 ? min(value, state.duration) : value
     }
 
-    // MARK: - Tapa y letra
+    // MARK: - Artwork and lyrics
 
     private func loadArtwork(for state: PlayerState) {
         let key = state.trackKey
@@ -255,11 +257,11 @@ final class PlayerController: ObservableObject {
         refreshSoon(0.5)
     }
 
-    // MARK: - Comandos
+    // MARK: - Commands
 
     private var activeSource: MediaSource? { state.flatMap { sources[$0.source] } }
 
-    /// Aplica un cambio optimista al estado para que la interfaz responda al instante.
+    /// Applies an optimistic change to the state so the UI responds instantly.
     private func update(_ change: (inout PlayerState) -> Void) {
         guard var current = state else { return }
         generation += 1
@@ -300,19 +302,36 @@ final class PlayerController: ObservableObject {
         refreshSoon(0.6)
     }
 
-    /// El slider manda decenas de valores por segundo: se agrupan cada 80 ms.
+    /// The slider sends dozens of values a second. The first one goes out right away, then
+    /// at most one every 50 ms (always ending on the last value), and the state is read
+    /// back only once the slider settles.
     func setVolume(_ volume: Int) {
         guard activeSource != nil else { return }
         update { $0.volume = volume }
-        let alreadyScheduled = pendingVolume != nil
-        pendingVolume = volume
-        guard !alreadyScheduled else { return }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) { [weak self] in
+        if volumeThrottled {
+            pendingVolume = volume
+        } else {
+            sendVolume(volume)
+        }
+        volumeRefresh?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            Task { @MainActor in self?.refresh() }
+        }
+        volumeRefresh = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6, execute: work)
+    }
+
+    private func sendVolume(_ volume: Int) {
+        activeSource?.setVolume(volume)
+        volumeThrottled = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
             Task { @MainActor in
-                guard let self, let value = self.pendingVolume else { return }
-                self.pendingVolume = nil
-                self.activeSource?.setVolume(value)
-                self.refreshSoon(0.5)
+                guard let self else { return }
+                self.volumeThrottled = false
+                if let next = self.pendingVolume {
+                    self.pendingVolume = nil
+                    self.sendVolume(next)
+                }
             }
         }
     }

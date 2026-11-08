@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// Modo compacto (320 × 144): miniatura, título y controles sobre un fondo
-/// teñido con el color de la tapa.
+/// Compact mode (320 × 136): thumbnail, title and controls on a background
+/// tinted with the artwork's color.
 struct CompactModeView: View {
     @ObservedObject var player: PlayerController
     @ObservedObject var settings: Settings
@@ -29,8 +29,8 @@ struct CompactModeView: View {
                 TransportRow(player: player, size: .medium)
                     .padding(.top, 2)
             }
-            // 16 arriba hasta la tapita; abajo, 10 más el aire propio de los
-            // botones: a la vista, el mismo margen arriba y abajo.
+            // 16 above the thumbnail; below, 10 plus the buttons' own air:
+            // visually the same margin top and bottom.
             .padding(.top, 16)
             .padding(.horizontal, 16)
             .padding(.bottom, 10)
@@ -81,7 +81,7 @@ struct CompactModeView: View {
                                 .contentShape(Rectangle())
                         }
                         .buttonStyle(PressableStyle())
-                        .help("Más opciones")
+                        .help("More Options")
                     }
                     .transition(.opacity.combined(with: .offset(x: 6)))
                 } else if let kind = player.state?.source {

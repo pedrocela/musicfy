@@ -1,15 +1,17 @@
 import SwiftUI
 
-/// Modo Isla: cápsula de 300 × 40 centrada debajo de la barra de menú. Al dejar
-/// el mouse encima se abre hacia abajo (380 × 168) con los controles.
+/// Island mode: a 300 × 44 pill under the menu bar. Resting the mouse on it opens it
+/// downward (380 × 160) with the controls.
 ///
-/// La ventana tiene siempre el tamaño de la Isla abierta (más el margen de la
-/// sombra); lo que se anima es la cápsula adentro. La app deja pasar los clics
-/// por la parte transparente.
+/// The window is always the size of the open Island (plus room for the shadow); what
+/// animates is the pill inside. Clicks pass through the transparent part.
 struct IslandView: View {
     @ObservedObject var player: PlayerController
     @ObservedObject var settings: Settings
     @ObservedObject var panel: PanelModel
+
+    /// The text and ring fade in once the pill is in place (after the morph from the panel).
+    @State private var settled = false
 
     private var expanded: Bool { panel.islandExpanded }
     private var accent: Color { Color(nsColor: player.palette.accent) }
@@ -17,7 +19,7 @@ struct IslandView: View {
 
     var body: some View {
         let size = expanded ? Theme.islandExpanded : Theme.islandCollapsed
-        let shape = RoundedRectangle(cornerRadius: expanded ? Theme.islandOpenRadius : Theme.islandRadius, style: .continuous)
+        let shape = RoundedRectangle(cornerRadius: Theme.cornerRadius, style: .continuous)
         VStack(alignment: panel.islandAlignment.horizontal, spacing: 0) {
             ZStack(alignment: .top) {
                 Theme.islandFill
@@ -41,7 +43,7 @@ struct IslandView: View {
             .frame(width: size.width, height: size.height, alignment: .top)
             .clipShape(shape)
             .overlay(shape.strokeBorder(Theme.islandStroke, lineWidth: 0.5))
-            // Al tirarla hacia abajo crece un poco y se aclara el borde: avisa que se va a volver tapa.
+            // Pulled down, it grows a little and its rim brightens: it's about to become the artwork.
             .overlay(shape.strokeBorder(Color.white.opacity(0.28 * panel.islandPull), lineWidth: 1))
             .scaleEffect(1 + 0.08 * panel.islandPull, anchor: .top)
             .shadow(color: .black.opacity(expanded ? 0.32 : 0.22), radius: expanded ? 20 : 10, y: expanded ? 10 : 4)
@@ -55,13 +57,16 @@ struct IslandView: View {
             alignment: Alignment(horizontal: panel.islandAlignment.horizontal, vertical: .top)
         )
         .environment(\.colorScheme, .dark)
+        .onAppear {
+            withAnimation(Theme.smooth.delay(0.03)) { settled = true }
+        }
     }
 
-    // MARK: Cerrada
+    // MARK: Closed
 
     private var collapsedContent: some View {
         HStack(spacing: 10) {
-            thumbnail(side: 28, radius: 8)
+            thumbnail(side: Theme.islandThumb, radius: Theme.islandThumbRadius)
                 .saturation(playing ? 1 : 0.35)
                 .opacity(playing ? 1 : 0.8)
             VStack(alignment: .leading, spacing: 0) {
@@ -77,13 +82,13 @@ struct IslandView: View {
                     if playing {
                         SubtitleLine(player: player, font: Theme.islandSubtitle, height: 14, text: islandSubtitle(state), showsLyric: true)
                     } else {
-                        Text("En pausa")
+                        Text("Paused")
                             .font(Theme.islandSubtitle)
                             .foregroundStyle(Color.white.opacity(0.55))
                             .frame(height: 14)
                     }
                 } else {
-                    Text("Nada sonando")
+                    Text("Nothing Playing")
                         .font(Theme.islandTitle)
                         .foregroundStyle(Color.white.opacity(0.75))
                 }
@@ -92,13 +97,16 @@ struct IslandView: View {
             .transition(.opacity.combined(with: .offset(y: 6)))
             .animation(Theme.crossfade, value: player.state?.trackKey)
             .allowsHitTesting(false)
+            .opacity(settled ? 1 : 0)
 
             if player.state != nil {
                 ProgressRing(player: player, playing: playing, accent: accent)
+                    .opacity(settled ? 1 : 0)
+                    .scaleEffect(settled ? 1 : 0.6)
             }
         }
-        .padding(.leading, 6)
-        .padding(.trailing, 9)
+        .padding(.leading, Theme.islandThumbInset)
+        .padding(.trailing, 11)
         .frame(width: Theme.islandCollapsed.width, height: Theme.islandCollapsed.height)
     }
 
@@ -109,7 +117,7 @@ struct IslandView: View {
             : artist
     }
 
-    // MARK: Abierta
+    // MARK: Open
 
     private var expandedContent: some View {
         VStack(spacing: 0) {
@@ -118,7 +126,7 @@ struct IslandView: View {
                     .frame(maxHeight: .infinity)
             } else {
                 HStack(alignment: .top, spacing: 12) {
-                    thumbnail(side: 56, radius: 12)
+                    thumbnail(side: 56, radius: Theme.islandThumbRadius)
                     VStack(alignment: .leading, spacing: 2) {
                         MarqueeText(text: player.state?.title ?? "", font: Theme.islandOpenTitle, color: Theme.primary, height: 19)
                         SubtitleLine(player: player, font: Theme.compactSubtitle, height: 16, showsLyric: true)
@@ -168,8 +176,8 @@ struct IslandView: View {
     }
 }
 
-/// A la derecha de la Isla cerrada: un anillo con el avance del tema y,
-/// adentro, tres barritas que bailan (o el ícono de play si está en pausa).
+/// At the right of the closed Island: a ring with the song's progress and, inside,
+/// three dancing bars (or a play icon when paused).
 private struct ProgressRing: View {
     @ObservedObject var player: PlayerController
     let playing: Bool
@@ -208,7 +216,7 @@ private struct ProgressRing: View {
     }
 }
 
-/// Tres barritas que suben y bajan a ritmos distintos.
+/// Three bars bouncing at different rhythms.
 private struct Equalizer: View {
     let color: Color
 
@@ -230,8 +238,8 @@ private struct Equalizer: View {
     }
 }
 
-/// Fondo de la Isla: clic derecho abre el menú; arrastrar la mueve por el borde
-/// de arriba y al soltar se pega a la izquierda, al centro o a la derecha.
+/// Island background: right click opens the menu; dragging moves it along the top edge
+/// and on release it snaps left, center or right. Pulled down, it becomes the artwork.
 private struct IslandDragArea: NSViewRepresentable {
     final class DragView: NSView {
         private var startMouse = NSPoint.zero
@@ -244,8 +252,8 @@ private struct IslandDragArea: NSViewRepresentable {
             startOrigin = window?.frame.origin ?? .zero
         }
 
-        /// Hacia los costados la sigue tal cual; hacia abajo también, para volverla tapa.
-        /// Hacia arriba no se mueve: ya está pegada a la barra de menú.
+        /// Follows the mouse sideways, and downward too (to turn it into the artwork).
+        /// It doesn't move up: it's already against the menu bar.
         override func mouseDragged(with event: NSEvent) {
             guard let window else { return }
             let mouse = NSEvent.mouseLocation

@@ -1,8 +1,8 @@
 import CoreAudio
 import Foundation
 
-/// Salidas de audio del Mac (parlantes, auriculares, AirPods, AirPlay…).
-/// Cambiar la salida acá cambia la del sistema, así que vale para Music y Spotify.
+/// The Mac's audio outputs (speakers, headphones, AirPods, AirPlay…).
+/// Changing it here changes the system output, so it applies to Music and Spotify.
 enum AudioOutputs {
     struct Device: Identifiable, Equatable {
         let id: AudioDeviceID

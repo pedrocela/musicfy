@@ -13,7 +13,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let delegate = AppDelegate()
         shared = delegate
         app.delegate = delegate
-        app.setActivationPolicy(.accessory) // sin ícono en el Dock
+        app.setActivationPolicy(.accessory) // no Dock icon
         app.run()
     }
 
@@ -29,33 +29,38 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var idleWork: DispatchWorkItem?
     private var islandCollapseWork: DispatchWorkItem?
     private var islandHoverSince: Date?
-    /// La tapa pasó a compacto porque no suena nada (no porque lo eligió el usuario).
+    /// Artwork switched to compact because nothing is playing (not because the user chose it).
     private var idleCompact = false
-    /// Se escondió solo; vuelve cuando algo suena.
+    /// Hid itself; comes back when something plays.
     private var autoHidden = false
     private var menuOpen = false
     private var applyingFrame = false
-    /// El usuario pidió otro modo estando en pausa: no se vuelve a achicar solo hasta que suene algo.
+    /// The user picked a mode while paused: don't auto-shrink again until something plays.
     private var userOverrodeIdle = false
-    private var swapGeneration = 0
-    // Arrastre de la ventana (para soltarla arriba al centro y que se vuelva Isla).
+    // Morph to or from the Island.
+    private var transitionGeneration = 0
+    private var morphTarget: DisplayMode?
+    // Dragging the window (dropping it at the top center turns it into the Island).
     private var draggingWindow = false
     private var dragStartAnchor: NSPoint?
-    // Cambio de tamaño desde los bordes.
+    // Resizing from the edges.
     private var resizeStartFrame = NSRect.zero
     private var resizeStartSide: CGFloat = 0
+    private var resizeSwitchedMode = false
     private var hideHotKey: HotKey?
+    private var grip: ResizeGripView!
 
     var isPanelVisible: Bool { panel?.isVisible ?? false }
+    private var transitioning: Bool { panelModel.morph != nil }
 
-    // MARK: - Arranque
+    // MARK: - Launch
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         panelModel.actions = PanelActions(
-            setMode: { [weak self] mode in self?.settings.mode = mode },
+            setMode: { [weak self] mode in self?.userSwitch(to: mode) },
             toggleArtworkCompact: { [weak self] in
                 guard let self else { return }
-                self.settings.mode = self.panelModel.mode == .artwork ? .compact : .artwork
+                self.userSwitch(to: self.panelModel.mode == .artwork ? .compact : .artwork)
             },
             hide: { [weak self] in self?.hidePanel() },
             showMenu: { [weak self] in self?.showMainMenu() },
@@ -67,14 +72,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let root = RootView(player: player, settings: settings, panel: panelModel)
         let hosting = FirstMouseHostingView(rootView: root)
         hosting.sizingOptions = []
-        // Encima de la interfaz, una capa invisible que toma sólo los bordes para agrandar.
-        let grip = ResizeGripView()
+        // On top of the UI, an invisible layer that only takes the edges, for resizing.
+        BackgroundCursor.enable()
+        grip = ResizeGripView()
         grip.allowedEdges = { [weak self] in self?.resizableEdges ?? [] }
         grip.onBegin = { [weak self] in self?.beginResize() }
         grip.onResize = { [weak self] edges, dx, dy in self?.resize(edges: edges, dx: dx, dy: dy) ?? false }
         grip.onEnd = { [weak self] in self?.endResize() }
         let container = NSView(frame: NSRect(origin: .zero, size: Theme.artworkSize))
-        for view in [hosting, grip] as [NSView] {
+        for view in [hosting, grip!] as [NSView] {
             view.frame = container.bounds
             view.autoresizingMask = [.width, .height]
             container.addSubview(view)
@@ -83,7 +89,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
         setUpStatusItem()
         observe()
-        // ⌥⌘M desde cualquier app: muestra o esconde el player.
+        // ⌥⌘M from any app: show or hide the player.
         hideHotKey = HotKey(keyCode: kVK_ANSI_M, modifiers: cmdKey | optionKey, id: 1) { [weak self] in
             self?.togglePanel()
         }
@@ -101,7 +107,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             queue: .main
         ) { [weak self] _ in
             Task { @MainActor in
-                guard let self else { return }
+                guard let self, !self.transitioning else { return }
                 self.placePanel(for: self.panelModel.mode)
             }
         }
@@ -112,10 +118,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         return false
     }
 
-    // MARK: - Observadores
+    // MARK: - Observers
 
     private func observe() {
-        // El modo elegido en el menú.
+        // The mode chosen in Settings.
         settings.$mode
             .dropFirst()
             .receive(on: RunLoop.main)
@@ -138,7 +144,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             }
             .store(in: &cancellables)
 
-        // Panel de letras o cola: la ventana crece hacia abajo.
+        // Lyrics or queue panel: the window grows downward.
         panelModel.$drawer
             .dropFirst()
             .removeDuplicates()
@@ -147,13 +153,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                 guard let self else { return }
                 self.player.lyricsVisible = drawer == .lyrics
                 self.player.queueVisible = drawer == .queue
-                if self.panelModel.mode != .island, !self.panelModel.swapOut { self.animateFrame(to: self.framedRect(for: self.panelModel.mode)) }
-                // Con un panel abierto la tapa no se achica; al cerrarlo, sí (si sigue en pausa).
+                if self.panelModel.mode != .island, !self.transitioning {
+                    self.animateFrame(to: self.framedRect(for: self.panelModel.mode))
+                }
+                // With a panel open the artwork doesn't shrink; once it closes, it does (if still paused).
                 self.evaluateIdle()
             }
             .store(in: &cancellables)
 
-        // Play / pausa: decide si achicar, esconder o volver.
+        // Play / pause: decide whether to shrink, hide or come back.
         player.$state
             .map { $0?.isPlaying ?? false }
             .removeDuplicates()
@@ -162,7 +170,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             .store(in: &cancellables)
     }
 
-    // MARK: - Sin música
+    // MARK: - Nothing playing
 
     private var isPlaying: Bool { player.state?.isPlaying ?? false }
 
@@ -172,12 +180,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
         if isPlaying {
             userOverrodeIdle = false
-            var changed = false
             if idleCompact {
                 idleCompact = false
-                changed = true
+                updateMode(animated: true)
             }
-            if changed { updateMode(animated: true) }
             if autoHidden {
                 autoHidden = false
                 showPanel()
@@ -205,8 +211,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     private func idleTimerFired() {
         guard !isPlaying else { return }
-        // Nunca cambiar la ventana debajo del mouse: se espera a que salga.
-        if panelModel.isHovering || panelModel.islandExpanded || menuOpen {
+        // Never change the window under the mouse: wait for it to leave.
+        if panelModel.isHovering || panelModel.islandExpanded || menuOpen || transitioning {
             let work = DispatchWorkItem { [weak self] in
                 Task { @MainActor in self?.idleTimerFired() }
             }
@@ -228,18 +234,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
     }
 
-    // MARK: - Modo y tamaño
+    // MARK: - Mode and size
 
     private var targetMode: DisplayMode {
         idleCompact && settings.mode == .artwork ? .compact : settings.mode
     }
 
+    /// A mode change asked for by the user (menu, double click, a gesture).
+    func userSwitch(to mode: DisplayMode) {
+        if !isPlaying { userOverrodeIdle = true }
+        idleCompact = false
+        if settings.mode != mode { settings.mode = mode } // the observer runs again later; it's a no-op by then
+        updateMode(animated: true)
+    }
+
     private func updateMode(animated: Bool) {
         let from = panelModel.mode
         let to = targetMode
-        guard from != to else { return }
+        guard from != to, morphTarget != to else { return }
         panelModel.volumeOpen = false
-        panelModel.islandExpanded = false
         if to == .island {
             panelModel.drawer = .none
         } else if from == .island {
@@ -247,81 +260,124 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
 
         if !animated || !panel.isVisible {
+            transitionGeneration += 1
+            morphTarget = nil
+            panelModel.morph = nil
+            panelModel.islandExpanded = false
             panelModel.mode = to
             placePanel(for: to)
             return
         }
         if from == .island || to == .island {
-            swap(to: to)
+            morph(from: from, to: to)
             return
         }
 
+        panelModel.islandExpanded = false
         panelModel.mode = to
         animateFrame(to: framedRect(for: to))
     }
 
-    private func animateFrame(to frame: NSRect) {
+    private func animateFrame(
+        to frame: NSRect,
+        duration: TimeInterval = Theme.resizeDuration,
+        completion: (() -> Void)? = nil
+    ) {
         guard panel.isVisible else {
-            placePanel(for: panelModel.mode)
+            applyingFrame = true
+            panel.setFrame(frame, display: true)
+            applyingFrame = false
+            completion?()
             return
         }
         applyingFrame = true
         NSAnimationContext.runAnimationGroup({ context in
-            context.duration = Theme.resizeDuration
+            context.duration = duration
             context.timingFunction = CAMediaTimingFunction(controlPoints: 0.22, 1, 0.36, 1)
             context.allowsImplicitAnimation = true
             panel.animator().setFrame(frame, display: true)
         }, completionHandler: { [weak self] in
             Task { @MainActor in
-                self?.applyingFrame = false
-                self?.panel.invalidateShadow()
+                guard let self else { return }
+                self.applyingFrame = false
+                self.panel.invalidateShadow()
+                completion?()
             }
         })
     }
 
-    /// De o hacia la Isla la ventana cambia de lugar y de forma. La vista que se va se achica
-    /// hacia arriba, se desenfoca y se apaga; la ventana salta a su lugar nuevo sin que se vea
-    /// y la vista nueva llega desde arriba con un resorte, enfocándose.
-    private func swap(to mode: DisplayMode) {
-        swapGeneration += 1
-        let generation = swapGeneration
-        withAnimation(.easeIn(duration: 0.15)) { panelModel.swapOut = true }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
-            Task { @MainActor in
-                guard let self, self.swapGeneration == generation else { return }
-                self.panelModel.mode = mode
-                self.placePanel(for: mode)
-                self.panel.hasShadow = false
-                self.panel.alphaValue = 1
-                DispatchQueue.main.async {
-                    Task { @MainActor in
-                        guard self.swapGeneration == generation else { return }
-                        withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) { self.panelModel.swapOut = false }
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                            Task { @MainActor in
-                                guard self.swapGeneration == generation, self.panelModel.mode != .island else { return }
-                                self.panel.hasShadow = true
-                                self.panel.invalidateShadow()
-                            }
+    /// To or from the Island, the window turns into the other shape in one motion: the frame
+    /// travels between the panel and the pill while the artwork shrinks into (or grows out of)
+    /// the pill's thumbnail. Both ends look exactly like the real views, so the handoff is invisible.
+    private func morph(from: DisplayMode, to: DisplayMode) {
+        transitionGeneration += 1
+        let generation = transitionGeneration
+        morphTarget = to
+        hoverExitWork?.cancel()
+        hoverExitWork = nil
+        islandCollapseWork?.cancel()
+        islandCollapseWork = nil
+        panel.hasShadow = false
+        panel.ignoresMouseEvents = false
+        panel.alphaValue = 1
+
+        let still = Transaction(animation: nil)
+
+        if to == .island {
+            let look: MorphLook = from == .compact ? .compact : .artwork
+            // A quick crossfade from the live view to its morph twin (same look, without the text).
+            withAnimation(.easeOut(duration: 0.12)) {
+                panelModel.isHovering = false
+                panelModel.islandHint = false
+                panelModel.morph = Morph(look: look, progress: 0)
+            }
+            let pill = islandPillRect(inWindow: islandWindowRect(), expanded: false)
+            DispatchQueue.main.async { [weak self] in
+                Task { @MainActor in
+                    guard let self, self.transitionGeneration == generation else { return }
+                    withAnimation(Theme.morph) { self.panelModel.morph?.progress = 1 }
+                    self.animateFrame(to: pill, duration: Theme.morphDuration) { [weak self] in
+                        guard let self, self.transitionGeneration == generation else { return }
+                        withTransaction(still) {
+                            self.panelModel.islandExpanded = false
+                            self.panelModel.mode = .island
+                            self.panelModel.morph = nil
                         }
+                        self.morphTarget = nil
+                        self.placePanel(for: .island)
+                    }
+                }
+            }
+        } else {
+            let look: MorphLook = to == .compact ? .compact : .artwork
+            let pill = islandPillRect(inWindow: panel.frame, expanded: false)
+            withTransaction(still) {
+                panelModel.islandExpanded = false
+                panelModel.isHovering = false
+                panelModel.morph = Morph(look: look, progress: 1)
+                panelModel.mode = to
+            }
+            applyingFrame = true
+            panel.setFrame(pill, display: true)
+            applyingFrame = false
+            DispatchQueue.main.async { [weak self] in
+                Task { @MainActor in
+                    guard let self, self.transitionGeneration == generation else { return }
+                    withAnimation(Theme.morph) { self.panelModel.morph?.progress = 0 }
+                    self.animateFrame(to: self.framedRect(for: to), duration: Theme.morphDuration) { [weak self] in
+                        guard let self, self.transitionGeneration == generation else { return }
+                        self.morphTarget = nil
+                        // The text and controls fade in over the finished shape.
+                        withAnimation(.easeOut(duration: 0.2)) { self.panelModel.morph = nil }
+                        self.panel.hasShadow = true
+                        self.panel.invalidateShadow()
                     }
                 }
             }
         }
     }
 
-    /// Cambio de modo pedido con un gesto (tirar de un borde, soltar arriba, bajar la Isla).
-    func userSwitch(to mode: DisplayMode) {
-        if !isPlaying { userOverrodeIdle = true }
-        if settings.mode == mode {
-            idleCompact = false
-            updateMode(animated: true)
-        } else {
-            settings.mode = mode // el observador hace el resto
-        }
-    }
-
-    /// Ubica la ventana para el modo, sin animar.
+    /// Places the window for the mode, without animation.
     private func placePanel(for mode: DisplayMode) {
         applyingFrame = true
         if mode == .island {
@@ -349,7 +405,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
     }
 
-    // Tapa y compacto: se recuerda la esquina de arriba a la izquierda.
+    // Artwork and compact remember their top-left corner.
     private var anchor: NSPoint {
         get {
             if let saved = UserDefaults.standard.string(forKey: "panelTopLeft") {
@@ -366,7 +422,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private func framedRect(for mode: DisplayMode) -> NSRect {
         let size = size(for: mode)
         var frame = NSRect(x: anchor.x, y: anchor.y - size.height, width: size.width, height: size.height)
-        // Que no quede fuera de la pantalla (se desenchufó un monitor, se agrandó cerca del borde).
+        // Keep it on screen (a display was unplugged, it grew near an edge).
         let screen = NSScreen.screens.first { $0.visibleFrame.intersects(frame) } ?? NSScreen.main ?? NSScreen.screens[0]
         let visible = screen.visibleFrame
         frame.origin.x = min(max(frame.minX, visible.minX + 4), visible.maxX - frame.width - 4)
@@ -374,7 +430,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         return frame
     }
 
-    // Isla: arriba al centro de la pantalla con la barra de menú.
+    // Island: top center of the screen with the menu bar.
     private var islandWindowSize: CGSize {
         CGSize(
             width: Theme.islandExpanded.width + Theme.islandShadowMargin * 2,
@@ -396,7 +452,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         return NSRect(x: x, y: visible.maxY - Theme.islandTopGap - size.height, width: size.width, height: size.height)
     }
 
-    /// Distancia del borde izquierdo de la ventana al de la cápsula.
+    /// Distance from the window's left edge to the pill's.
     private func islandPillOffset(width: CGFloat, alignment: IslandAlignment) -> CGFloat {
         let margin = Theme.islandShadowMargin
         switch alignment {
@@ -406,15 +462,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
     }
 
-    /// Dónde está la cápsula dentro de la ventana de la Isla, en coordenadas de pantalla.
-    private func islandPillRect() -> NSRect {
-        let frame = panel.frame
-        let size = panelModel.islandExpanded ? Theme.islandExpanded : Theme.islandCollapsed
+    /// Where the pill sits inside an Island window frame, in screen coordinates.
+    private func islandPillRect(inWindow frame: NSRect, expanded: Bool) -> NSRect {
+        let size = expanded ? Theme.islandExpanded : Theme.islandCollapsed
         let x = frame.minX + islandPillOffset(width: size.width, alignment: panelModel.islandAlignment)
         return NSRect(x: x, y: frame.maxY - size.height, width: size.width, height: size.height)
     }
 
-    /// Al soltar la Isla después de arrastrarla: se pega a la izquierda, al centro o a la derecha.
+    private func islandPillRect() -> NSRect {
+        islandPillRect(inWindow: panel.frame, expanded: panelModel.islandExpanded)
+    }
+
+    /// After dragging the Island sideways: it snaps to the left, center or right.
     func snapIsland() {
         guard panelModel.mode == .island else { return }
         let pill = islandPillRect()
@@ -426,7 +485,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         case (visible.maxX - third)...: target = .trailing
         default: target = .center
         }
-        // Se cambia la alineación sin que la cápsula salte y después se la lleva a su lugar.
+        // Change the alignment without the pill jumping, then carry it to its place.
         if target != panelModel.islandAlignment {
             panelModel.islandAlignment = target
             var frame = panel.frame
@@ -437,19 +496,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     func windowDidMove(_ notification: Notification) {
-        guard !applyingFrame, panelModel.mode != .island else { return }
+        guard !applyingFrame, !transitioning, panelModel.mode != .island else { return }
         anchor = NSPoint(x: panel.frame.minX, y: panel.frame.maxY)
     }
 
-    // MARK: - Agrandar y achicar desde los bordes
+    // MARK: - Resizing from the edges
 
-    /// Tapa: todos los bordes (con un panel abierto, el de abajo es del panel). Compacto: sólo
-    /// el de abajo, para estirarlo hasta la tapa. Isla: ninguno.
+    /// Artwork: every edge (with a panel open, the bottom belongs to the panel).
+    /// Compact: sides and bottom, to stretch it into the artwork. Island: none.
     private var resizableEdges: ResizeEdges {
-        guard !panelModel.swapOut else { return [] }
+        guard !transitioning, panelModel.drawer == .none || panelModel.mode == .artwork else { return [] }
         switch panelModel.mode {
         case .artwork: return panelModel.drawer == .none ? .all : [.left, .right, .top]
-        case .compact: return panelModel.drawer == .none ? .bottom : []
+        case .compact: return [.left, .right, .bottom]
         case .island: return []
         }
     }
@@ -457,25 +516,37 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private func beginResize() {
         resizeStartFrame = panel.frame
         resizeStartSide = panelModel.artworkSide
+        resizeSwitchedMode = false
     }
 
-    /// Devuelve `false` cuando el gesto termina en otro modo.
+    /// Returns `false` when the gesture ends in another mode.
     private func resize(edges: ResizeEdges, dx: CGFloat, dy: CGFloat) -> Bool {
         let range = Theme.artworkSideRange
         switch panelModel.mode {
         case .artwork:
+            let extra = panelModel.drawer == .none ? 0 : Theme.drawerHeight
+            // Only the top or bottom edge, pushed inward, squashes it into compact: it follows
+            // the mouse 1:1 while compact fades in over it.
+            if edges == .top || edges == .bottom, panelModel.drawer == .none {
+                let squash = edges == .bottom ? dy : -dy
+                if squash > 0 {
+                    let compact = Theme.compactSize
+                    let progress = min(1, squash / max(1, resizeStartSide - compact.height))
+                    let width = resizeStartSide + (compact.width - resizeStartSide) * progress
+                    let height = resizeStartSide + (compact.height - resizeStartSide) * progress
+                    let top = edges == .top ? resizeStartFrame.minY + height : resizeStartFrame.maxY
+                    panelModel.squash = progress
+                    panel.setFrame(NSRect(x: resizeStartFrame.minX, y: top - height, width: width, height: height), display: true)
+                    return true
+                }
+                if panelModel.squash > 0 { panelModel.squash = 0 }
+            }
+
             var horizontal: CGFloat = 0, vertical: CGFloat = 0
             if edges.contains(.right) { horizontal = dx } else if edges.contains(.left) { horizontal = -dx }
             if edges.contains(.bottom) { vertical = -dy } else if edges.contains(.top) { vertical = dy }
             let proposed = resizeStartSide + (abs(horizontal) >= abs(vertical) ? horizontal : vertical)
-
-            // Achicarla bastante más allá del mínimo la pasa a compacto.
-            if proposed < range.lowerBound - 56 {
-                panelModel.artworkSide = range.lowerBound
-                userSwitch(to: .compact)
-                return false
-            }
-            // Pasado el mínimo o el máximo, se resiste como una goma.
+            // Past the minimum or maximum it resists, like rubber.
             let side: CGFloat
             if proposed < range.lowerBound {
                 side = range.lowerBound - (range.lowerBound - proposed) * 0.25
@@ -484,8 +555,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             } else {
                 side = proposed
             }
-            let extra = panelModel.drawer == .none ? 0 : Theme.drawerHeight
-            // Queda fija la esquina opuesta a la que se tira.
+            // The corner opposite the one being pulled stays put.
             let top = edges.contains(.top) ? resizeStartFrame.maxY - resizeStartSide + side : resizeStartFrame.maxY
             let left = edges.contains(.left) ? resizeStartFrame.maxX - side : resizeStartFrame.minX
             panelModel.artworkSide = side
@@ -493,17 +563,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             return true
 
         case .compact:
-            let pull = -dy // hacia abajo
-            // Estirar el compacto hacia abajo lo vuelve tapa.
-            if pull > 52 {
-                userSwitch(to: .artwork)
-                return false
-            }
-            let stretch = max(0, pull) * 0.35
-            var frame = resizeStartFrame
-            frame.size.height += stretch
-            frame.origin.y -= stretch
-            panel.setFrame(frame, display: true)
+            // Compact follows the mouse 1:1 toward the artwork size; the artwork fades in as it grows.
+            var growth: CGFloat = 0
+            if edges.contains(.bottom) { growth = max(growth, -dy) }
+            if edges.contains(.right) { growth = max(growth, dx) }
+            if edges.contains(.left) { growth = max(growth, -dx) }
+            let side = panelModel.artworkSide
+            let base = Theme.compactSize
+            let progress = min(1, max(0, growth / max(1, side - base.height)))
+            let width = base.width + (side - base.width) * progress
+            let height = base.height + (side - base.height) * progress
+            let left = edges.contains(.left) ? resizeStartFrame.maxX - width : resizeStartFrame.minX
+            panelModel.grow = progress
+            panel.setFrame(NSRect(x: left, y: resizeStartFrame.maxY - height, width: width, height: height), display: true)
             return true
 
         case .island:
@@ -512,42 +584,78 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     private func endResize() {
-        let range = Theme.artworkSideRange
-        let clamped = min(max(panelModel.artworkSide, range.lowerBound), range.upperBound)
-        if clamped != panelModel.artworkSide { panelModel.artworkSide = clamped }
-        guard panelModel.mode != .island else { return }
-        let target = framedRect(for: panelModel.mode)
-        if target != panel.frame {
-            animateFrame(to: target) // vuelve la goma
-        } else {
-            panel.invalidateShadow()
+        guard !resizeSwitchedMode else { return }
+        let startAnchor = NSPoint(x: resizeStartFrame.minX, y: resizeStartFrame.maxY)
+        switch panelModel.mode {
+        case .compact:
+            if panelModel.grow >= 0.35 {
+                // Past a third of the way: finish the trip into artwork.
+                withAnimation(Theme.smooth) { panelModel.grow = 1 }
+                userSwitch(to: .artwork)
+                resetStretch(after: Theme.resizeDuration)
+            } else {
+                anchor = startAnchor
+                withAnimation(Theme.smooth) { panelModel.grow = 0 }
+                animateFrame(to: framedRect(for: .compact))
+            }
+        case .artwork:
+            if panelModel.squash > 0 {
+                if panelModel.squash >= 0.35 {
+                    withAnimation(Theme.smooth) { panelModel.squash = 1 }
+                    userSwitch(to: .compact)
+                    resetStretch(after: Theme.resizeDuration)
+                } else {
+                    anchor = startAnchor
+                    withAnimation(Theme.smooth) { panelModel.squash = 0 }
+                    animateFrame(to: framedRect(for: .artwork))
+                }
+                return
+            }
+            let range = Theme.artworkSideRange
+            let clamped = min(max(panelModel.artworkSide, range.lowerBound), range.upperBound)
+            if clamped != panelModel.artworkSide { panelModel.artworkSide = clamped }
+            let target = framedRect(for: .artwork)
+            if target != panel.frame {
+                animateFrame(to: target) // the rubber springs back
+            } else {
+                panel.invalidateShadow()
+            }
+        case .island:
+            break
         }
     }
 
-    // MARK: - Arrastrar entre modos
+    private func resetStretch(after delay: TimeInterval) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+            Task { @MainActor in
+                self?.panelModel.grow = 0
+                self?.panelModel.squash = 0
+            }
+        }
+    }
 
-    /// Zona de la Isla: arriba al centro de la pantalla con la barra de menú.
+    // MARK: - Dragging between modes
+
+    /// The Island zone: top center of the screen with the menu bar.
     private func isInIslandZone(_ point: NSPoint) -> Bool {
         guard let screen = NSScreen.screens.first else { return false }
         let visible = screen.visibleFrame
         return point.y > visible.maxY - 64 && point.y <= screen.frame.maxY && abs(point.x - visible.midX) < 200
     }
 
-    /// Lo llama la zona de arrastre al apretar el mouse sobre la tapa o el compacto.
+    /// Called by the drag area when the mouse goes down on the artwork or compact view.
     func windowDragBegan() {
-        guard panelModel.mode != .island else { return }
+        guard panelModel.mode != .island, !transitioning else { return }
         draggingWindow = true
         dragStartAnchor = anchor
     }
 
-    /// Al soltar: si quedó arriba al centro, se vuelve Isla.
+    /// On release: if it's at the top center, it becomes the Island.
     func windowDragEnded() {
         guard draggingWindow else { return }
         draggingWindow = false
-        let drop = panelModel.islandHint
-        withAnimation(Theme.smooth) { panelModel.islandHint = false }
-        guard drop else { return }
-        // La tapa vuelve a donde estaba antes del arrastre cuando se salga de la Isla.
+        guard panelModel.islandHint else { return }
+        // The panel goes back to where it was before the drag when it leaves the Island.
         if let start = dragStartAnchor { anchor = start }
         panelModel.islandAlignment = .center
         userSwitch(to: .island)
@@ -565,7 +673,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
     }
 
-    /// La Isla se tira hacia abajo: va siguiendo al mouse.
+    /// The Island is being pulled down: it follows the mouse.
     func islandPulled(by distance: CGFloat) {
         let progress = min(1, max(0, distance / Theme.islandPullThreshold))
         if abs(progress - panelModel.islandPull) > 0.01 {
@@ -573,8 +681,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
     }
 
-    /// Se soltó la Isla después de tirarla hacia abajo. Si pasó el umbral, se vuelve tapa
-    /// justo debajo de donde quedó; si no, vuelve a su lugar.
+    /// The Island was released after pulling it down. Past the threshold it becomes the artwork
+    /// right where it is; otherwise it goes back to its place.
     func islandReleased(pulled distance: CGFloat) {
         withAnimation(Theme.smooth) { panelModel.islandPull = 0 }
         guard distance >= Theme.islandPullThreshold else {
@@ -589,9 +697,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     // MARK: - Mouse
 
-    /// Se mira dónde está el mouse 30 veces por segundo. Es más confiable que el
-    /// seguimiento de AppKit en una ventana que nunca está activa, y deja que la
-    /// parte transparente de la Isla no bloquee clics.
+    /// The mouse position is checked 30 times a second. It's more reliable than AppKit tracking
+    /// in a window that's never active, and lets the Island's transparent area pass clicks through.
     private func startMousePolling() {
         let timer = Timer(timeInterval: 1.0 / 30, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.pollMouse() }
@@ -604,6 +711,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         guard let panel, panel.isVisible, !menuOpen else { return }
         let mouse = NSEvent.mouseLocation
         trackWindowDrag(mouse: mouse)
+        guard !transitioning else { return }
 
         if panelModel.mode == .island {
             let inside = islandPillRect().insetBy(dx: -2, dy: -2).contains(mouse)
@@ -612,7 +720,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                 islandCollapseWork?.cancel()
                 islandCollapseWork = nil
                 if !panelModel.islandExpanded {
-                    // Se abre si el mouse se queda 0,15 s: pasar de largo no la despliega.
+                    // Opens if the mouse stays 0.15 s: passing over doesn't unfold it.
                     let since = islandHoverSince ?? Date()
                     islandHoverSince = since
                     if Date().timeIntervalSince(since) >= 0.15 { panelModel.islandExpanded = true }
@@ -636,6 +744,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
 
         let inside = panel.frame.contains(mouse)
+        if inside { grip.refreshCursor(atScreenPoint: mouse) }
         if inside {
             hoverExitWork?.cancel()
             hoverExitWork = nil
@@ -654,7 +763,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
     }
 
-    // MARK: - Mostrar y esconder
+    // MARK: - Show and hide
 
     func showPanel() {
         autoHidden = false
@@ -696,7 +805,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         })
     }
 
-    // MARK: - Menús
+    // MARK: - Menus
 
     func showMainMenu() {
         popUp(Menus.main(app: self))
@@ -712,26 +821,43 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         menuOpen = false
     }
 
-    // MARK: - Barra de menú
+    // MARK: - Menu bar
 
     private func setUpStatusItem() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         guard let button = statusItem.button else { return }
-        button.image = NSImage(systemSymbolName: "music.note", accessibilityDescription: "Musicfy")
+        button.image = Self.menuBarIcon()
         button.target = self
         button.action = #selector(statusItemClicked)
         button.sendAction(on: [.leftMouseUp, .rightMouseUp])
     }
 
-    /// Clic: muestra o esconde el player. Clic derecho (o con Control): el menú.
+    /// Click (any button): the menu. Show and hide live in the menu and on ⌥⌘M.
     @objc private func statusItemClicked() {
-        let event = NSApp.currentEvent
-        if event?.type == .rightMouseUp || event?.modifierFlags.contains(.control) == true {
-            statusItem.menu = Menus.main(app: self)
-            statusItem.button?.performClick(nil)
-            statusItem.menu = nil
-        } else {
-            togglePanel()
+        statusItem.menu = Menus.main(app: self)
+        statusItem.button?.performClick(nil)
+        statusItem.menu = nil
+    }
+
+    /// A little "cover": a rounded square with the note cut out of it. Template image,
+    /// so the menu bar tints it for light and dark.
+    private static func menuBarIcon() -> NSImage {
+        let size = NSSize(width: 18, height: 18)
+        let image = NSImage(size: size, flipped: false) { rect in
+            let cover = NSRect(x: 1.5, y: 1.5, width: rect.width - 3, height: rect.height - 3)
+            NSColor.black.setFill()
+            NSBezierPath(roundedRect: cover, xRadius: 4, yRadius: 4).fill()
+            let config = NSImage.SymbolConfiguration(pointSize: 9.5, weight: .bold)
+            if let note = NSImage(systemSymbolName: "music.note", accessibilityDescription: nil)?
+                .withSymbolConfiguration(config) {
+                let noteSize = note.size
+                let origin = NSPoint(x: cover.midX - noteSize.width / 2, y: cover.midY - noteSize.height / 2)
+                note.draw(in: NSRect(origin: origin, size: noteSize), from: .zero, operation: .destinationOut, fraction: 1)
+            }
+            return true
         }
+        image.isTemplate = true
+        image.accessibilityDescription = "Musicfy"
+        return image
     }
 }

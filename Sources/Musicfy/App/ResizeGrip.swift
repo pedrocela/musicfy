@@ -1,6 +1,6 @@
 import AppKit
 
-/// Bordes y esquinas de la ventana desde donde se cambia el tamaño.
+/// Window edges and corners that can be pulled to resize.
 struct ResizeEdges: OptionSet {
     let rawValue: Int
     static let left = ResizeEdges(rawValue: 1 << 0)
@@ -10,24 +10,25 @@ struct ResizeEdges: OptionSet {
     static let all: ResizeEdges = [.left, .right, .top, .bottom]
 }
 
-/// Capa invisible encima del player que toma sólo los bordes (5 pt) y las esquinas (12 pt):
-/// ahí cambia el cursor y arrastrar cambia el tamaño. Todo lo demás pasa de largo
-/// a la interfaz de abajo. La ventana no tiene marco, así que esto lo hace a mano.
+/// Invisible layer over the player that only claims the edges (7 pt) and corners (20 pt):
+/// there the cursor changes and dragging resizes. Everything else passes through to the
+/// UI below. The window is borderless, so this does by hand what a title bar window gets free.
 final class ResizeGripView: NSView {
-    /// Qué bordes se pueden tirar en el modo actual (vacío: ninguno).
+    /// Which edges can be pulled in the current mode (empty: none).
     var allowedEdges: () -> ResizeEdges = { [] }
     var onBegin: () -> Void = {}
-    /// Recibe el borde y cuánto se movió el mouse desde que se apretó. Devuelve `false`
-    /// para cortar el gesto (por ejemplo, porque cambió de modo).
+    /// Gets the edges and how far the mouse moved since mouse down. Returns `false`
+    /// to end the gesture (for example, because the mode changed).
     var onResize: (ResizeEdges, CGFloat, CGFloat) -> Bool = { _, _, _ in true }
     var onEnd: () -> Void = {}
 
-    private let edgeWidth: CGFloat = 5
-    private let cornerSize: CGFloat = 12
+    private let edgeWidth: CGFloat = 7
+    /// Covers the 16 pt rounded corners with room to spare.
+    private let cornerSize: CGFloat = 20
     private var active: ResizeEdges = []
-    private var tracking = false
+    private(set) var tracking = false
     private var startMouse = NSPoint.zero
-    private var showingCursor = false
+    private var shownEdges: ResizeEdges = []
 
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
@@ -42,18 +43,22 @@ final class ResizeGripView: NSView {
         var found: ResizeEdges = []
         let nearLeft = point.x < cornerSize, nearRight = point.x > bounds.maxX - cornerSize
         let nearBottom = point.y < cornerSize, nearTop = point.y > bounds.maxY - cornerSize
-        // Esquinas: zona más grande.
         if (nearLeft || nearRight), (nearTop || nearBottom) {
-            found.insert(nearLeft ? .left : .right)
-            found.insert(nearTop ? .top : .bottom)
-        } else {
-            if point.x < edgeWidth { found.insert(.left) }
-            if point.x > bounds.maxX - edgeWidth { found.insert(.right) }
-            if point.y < edgeWidth { found.insert(.bottom) }
-            if point.y > bounds.maxY - edgeWidth { found.insert(.top) }
+            // Corner: both edges, if both are allowed; otherwise whichever one is.
+            let horizontal: ResizeEdges = nearLeft ? .left : .right
+            let vertical: ResizeEdges = nearTop ? .top : .bottom
+            let corner = ResizeEdges([horizontal, vertical]).intersection(allowed)
+            if corner == [horizontal, vertical] { return corner }
+            // Only one side allowed: it still counts if the point is within that side's band.
+            if allowed.contains(vertical), nearTop ? point.y > bounds.maxY - edgeWidth : point.y < edgeWidth { return vertical }
+            if allowed.contains(horizontal), nearLeft ? point.x < edgeWidth : point.x > bounds.maxX - edgeWidth { return horizontal }
+            return []
         }
-        found.formIntersection(allowed)
-        return found
+        if point.x < edgeWidth { found.insert(.left) }
+        if point.x > bounds.maxX - edgeWidth { found.insert(.right) }
+        if point.y < edgeWidth { found.insert(.bottom) }
+        if point.y > bounds.maxY - edgeWidth { found.insert(.top) }
+        return found.intersection(allowed)
     }
 
     // MARK: Cursor
@@ -63,29 +68,41 @@ final class ResizeGripView: NSView {
         trackingAreas.forEach(removeTrackingArea)
         addTrackingArea(NSTrackingArea(
             rect: .zero,
-            options: [.mouseMoved, .mouseEnteredAndExited, .activeAlways, .inVisibleRect],
+            options: [.mouseMoved, .mouseEnteredAndExited, .cursorUpdate, .activeAlways, .inVisibleRect],
             owner: self
         ))
     }
 
     override func mouseMoved(with event: NSEvent) {
         guard !tracking else { return }
-        updateCursor(for: edges(at: convert(event.locationInWindow, from: nil)))
+        showCursor(for: edges(at: convert(event.locationInWindow, from: nil)))
+    }
+
+    override func cursorUpdate(with event: NSEvent) {
+        guard !tracking else { return }
+        showCursor(for: edges(at: convert(event.locationInWindow, from: nil)))
     }
 
     override func mouseExited(with event: NSEvent) {
         guard !tracking else { return }
-        updateCursor(for: [])
+        showCursor(for: [])
     }
 
-    private func updateCursor(for edges: ResizeEdges) {
+    /// Called by the app's mouse poll too: a background app's cursor gets reset by the
+    /// frontmost app, so it's set again while the pointer sits on an edge.
+    func refreshCursor(atScreenPoint point: NSPoint) {
+        guard !tracking, let window else { return }
+        let local = convert(window.convertPoint(fromScreen: point), from: nil)
+        showCursor(for: edges(at: local), force: true)
+    }
+
+    private func showCursor(for edges: ResizeEdges, force: Bool = false) {
         if edges.isEmpty {
-            if showingCursor { NSCursor.arrow.set() }
-            showingCursor = false
-        } else {
+            if !shownEdges.isEmpty { NSCursor.arrow.set() }
+        } else if force || edges != shownEdges {
             Self.cursor(for: edges).set()
-            showingCursor = true
         }
+        shownEdges = edges
     }
 
     private static func cursor(for edges: ResizeEdges) -> NSCursor {
@@ -108,18 +125,20 @@ final class ResizeGripView: NSView {
         return .crosshair
     }
 
-    // MARK: Arrastre
+    // MARK: Dragging
 
     override func mouseDown(with event: NSEvent) {
         active = edges(at: convert(event.locationInWindow, from: nil))
         guard !active.isEmpty else { return }
         tracking = true
         startMouse = NSEvent.mouseLocation
+        Self.cursor(for: active).set()
         onBegin()
     }
 
     override func mouseDragged(with event: NSEvent) {
         guard tracking else { return }
+        Self.cursor(for: active).set()
         let mouse = NSEvent.mouseLocation
         if !onResize(active, mouse.x - startMouse.x, mouse.y - startMouse.y) {
             finish()
@@ -133,7 +152,27 @@ final class ResizeGripView: NSView {
     private func finish() {
         tracking = false
         active = []
-        updateCursor(for: [])
+        shownEdges = []
+        NSCursor.arrow.set()
         onEnd()
+    }
+}
+
+/// Lets this background app own the cursor while the pointer is over its window.
+/// Musicfy never becomes the active app (it would steal focus), and macOS normally
+/// ignores cursor changes from inactive apps. Floating utilities flip this private
+/// window-server property for that; it's looked up at runtime and skipped if missing.
+enum BackgroundCursor {
+    static func enable() {
+        typealias DefaultConnection = @convention(c) () -> Int32
+        typealias SetProperty = @convention(c) (Int32, Int32, CFString, CFTypeRef) -> Int32
+        let everywhere = UnsafeMutableRawPointer(bitPattern: -2) // RTLD_DEFAULT: every loaded image
+        guard
+            let connectionSymbol = dlsym(everywhere, "_CGSDefaultConnection"),
+            let setSymbol = dlsym(everywhere, "CGSSetConnectionProperty")
+        else { return }
+        let connection = unsafeBitCast(connectionSymbol, to: DefaultConnection.self)()
+        let setProperty = unsafeBitCast(setSymbol, to: SetProperty.self)
+        _ = setProperty(connection, connection, "SetsCursorInBackground" as CFString, kCFBooleanTrue)
     }
 }

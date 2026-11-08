@@ -1,41 +1,28 @@
 import SwiftUI
 
-/// Elige la vista según el modo y le pone el marco (esquinas, borde, permisos).
+/// Picks the view for the mode and frames it (corners, border, permissions).
 struct RootView: View {
     @ObservedObject var player: PlayerController
     @ObservedObject var settings: Settings
     @ObservedObject var panel: PanelModel
 
     var body: some View {
-        Group {
-            if panel.mode == .island {
+        ZStack {
+            if let morph = panel.morph {
+                MorphView(player: player, look: morph.look, progress: morph.progress)
+                    .transition(.opacity)
+            } else if panel.mode == .island {
                 IslandView(player: player, settings: settings, panel: panel)
+                    .transition(.opacity)
             } else {
                 framed
-                    // Arrastrada arriba al centro: se achica hacia arriba, avisando que va a ser Isla.
-                    .scaleEffect(panel.islandHint ? 0.9 : 1, anchor: .top)
-                    .opacity(panel.islandHint ? 0.82 : 1)
+                    // Dragged to the top center: it shrinks a little toward the top, hinting at the Island.
+                    .scaleEffect(panel.islandHint ? 0.94 : 1, anchor: .top)
+                    .opacity(panel.islandHint ? 0.85 : 1)
+                    .transition(.opacity)
             }
         }
-        // Cambio de forma (de o hacia la Isla): se va achicándose y desenfocándose hacia arriba,
-        // y lo nuevo llega desde ahí con un resorte.
-        .scaleEffect(panel.swapOut ? 0.8 : 1, anchor: swapAnchor)
-        .blur(radius: panel.swapOut ? 10 : 0)
-        .opacity(panel.swapOut ? 0 : 1)
         .environment(\.colorScheme, .dark)
-    }
-
-    private var swapAnchor: UnitPoint {
-        guard panel.mode == .island else { return .top }
-        switch panel.islandAlignment {
-        case .leading: return .topLeading
-        case .center: return .top
-        case .trailing: return .topTrailing
-        }
-    }
-
-    private var radius: CGFloat {
-        panel.mode == .artwork ? Theme.artworkRadius : Theme.compactRadius
     }
 
     private var baseHeight: CGFloat {
@@ -44,7 +31,7 @@ struct RootView: View {
 
     private var framed: some View {
         ZStack {
-            VisualEffectBackground(cornerRadius: radius)
+            VisualEffectBackground(cornerRadius: Theme.cornerRadius)
             VStack(spacing: 0) {
                 content
                     .frame(height: baseHeight)
@@ -54,21 +41,41 @@ struct RootView: View {
                 }
                 Spacer(minLength: 0)
             }
+            stretchPreview
             VStack {
                 Spacer()
                 PermissionBanner(player: player)
                     .padding(.bottom, 8)
             }
         }
-        .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: Theme.cornerRadius, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: radius, style: .continuous)
+            RoundedRectangle(cornerRadius: Theme.cornerRadius, style: .continuous)
                 .strokeBorder(Theme.windowStroke, lineWidth: 0.5)
         )
         .animation(Theme.smooth, value: panel.mode)
         .animation(Theme.smooth, value: panel.drawer)
         .animation(Theme.smooth, value: player.state == nil)
         .animation(Theme.smooth, value: player.problem)
+    }
+
+    /// While stretching compact into artwork (or squashing artwork into compact), the
+    /// destination fades in over the window so the release lands on what was already there.
+    @ViewBuilder
+    private var stretchPreview: some View {
+        if panel.mode == .compact, panel.grow > 0 {
+            ArtworkFill(image: player.artwork)
+                .opacity(Double(panel.grow))
+                .allowsHitTesting(false)
+        } else if panel.mode == .artwork, panel.squash > 0 {
+            VStack(spacing: 0) {
+                CompactModeView(player: player, settings: settings, panel: panel)
+                    .frame(height: Theme.compactSize.height)
+                Spacer(minLength: 0)
+            }
+            .opacity(Double(panel.squash))
+            .allowsHitTesting(false)
+        }
     }
 
     @ViewBuilder
@@ -88,7 +95,7 @@ struct RootView: View {
         }
     }
 
-    /// Letras o cola, debajo del player.
+    /// Lyrics or queue, below the player.
     private var drawer: some View {
         ZStack {
             Color.black.opacity(0.1)
@@ -104,5 +111,64 @@ struct RootView: View {
             Rectangle().fill(Color.white.opacity(0.08)).frame(height: 0.5)
         }
         .animation(Theme.fade, value: panel.drawer)
+    }
+}
+
+/// The window halfway between the panel and the Island. It fills the window, whose frame
+/// AppKit animates with the same curve; here the artwork travels from filling the panel
+/// (or from the compact thumbnail) to the Island's thumbnail, and the background darkens
+/// into the Island's. At 0 it looks like the panel, at 1 like the closed Island.
+struct MorphView: View, Animatable {
+    @ObservedObject var player: PlayerController
+    let look: MorphLook
+    var progress: CGFloat
+
+    var animatableData: CGFloat {
+        get { progress }
+        set { progress = newValue }
+    }
+
+    var body: some View {
+        GeometryReader { geo in
+            let size = geo.size
+            let p = max(0, min(1, progress))
+            let start: CGRect = look == .artwork
+                ? CGRect(origin: .zero, size: size)
+                : CGRect(x: 16, y: 16, width: 44, height: 44)
+            let end = CGRect(
+                x: Theme.islandThumbInset,
+                y: (size.height - Theme.islandThumb) / 2,
+                width: Theme.islandThumb,
+                height: Theme.islandThumb
+            )
+            let thumb = CGRect(
+                x: lerp(start.minX, end.minX, p),
+                y: lerp(start.minY, end.minY, p),
+                width: lerp(start.width, end.width, p),
+                height: lerp(start.height, end.height, p)
+            )
+            let startRadius: CGFloat = look == .artwork ? Theme.cornerRadius : 8
+            ZStack(alignment: .topLeading) {
+                if look == .compact {
+                    Color(nsColor: player.palette.background)
+                }
+                Theme.islandFill.opacity(look == .compact ? Double(p) : Double(min(1, p * 1.6)))
+                ArtworkFill(image: player.artwork)
+                    .frame(width: thumb.width, height: thumb.height)
+                    .clipShape(RoundedRectangle(cornerRadius: lerp(startRadius, Theme.islandThumbRadius, p), style: .continuous))
+                    .offset(x: thumb.minX, y: thumb.minY)
+            }
+            .frame(width: size.width, height: size.height, alignment: .topLeading)
+            .clipShape(RoundedRectangle(cornerRadius: Theme.cornerRadius, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: Theme.cornerRadius, style: .continuous)
+                    .strokeBorder(Color.white.opacity(0.1), lineWidth: 0.5)
+            )
+        }
+        .allowsHitTesting(false)
+    }
+
+    private func lerp(_ a: CGFloat, _ b: CGFloat, _ t: CGFloat) -> CGFloat {
+        a + (b - a) * t
     }
 }

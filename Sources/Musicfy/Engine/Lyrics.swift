@@ -1,20 +1,20 @@
 import Foundation
 
-/// Letras de LRCLIB (lrclib.net): gratis, sin cuenta, con tiempos por línea.
+/// Lyrics from LRCLIB (lrclib.net): free, no account, timed per line.
 struct Lyrics: Equatable {
     struct Line: Equatable {
         let time: Double
         let text: String
     }
 
-    /// Con tiempos. Vacío si sólo hay letra plana.
+    /// Timed. Empty when there are only plain lyrics.
     let lines: [Line]
     let plain: String
     let instrumental: Bool
 
     var isSynced: Bool { !lines.isEmpty }
 
-    /// Índice de la línea que corresponde a `position` (en segundos).
+    /// Index of the line for `position` (in seconds).
     func index(at position: Double) -> Int? {
         guard isSynced else { return nil }
         var low = 0, high = lines.count - 1, found: Int?
@@ -30,7 +30,7 @@ struct Lyrics: Equatable {
         return found
     }
 
-    /// "[01:23.45] texto" → Line(83.45, "texto"). Ignora etiquetas de metadata.
+    /// "[01:23.45] text" → Line(83.45, "text"). Ignores metadata tags.
     static func parseLRC(_ lrc: String) -> [Line] {
         var result: [Line] = []
         for raw in lrc.split(whereSeparator: \.isNewline) {
@@ -96,7 +96,7 @@ final class LyricsLoader {
         return Self.lyrics(from: json)
     }
 
-    /// Si no hay coincidencia exacta, la primera con letra sincronizada y duración parecida.
+    /// Without an exact match, the first one with synced lyrics and a similar duration.
     private func search(_ state: PlayerState) async -> Lyrics? {
         var components = URLComponents(string: "https://lrclib.net/api/search")!
         components.queryItems = [
