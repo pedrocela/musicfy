@@ -323,7 +323,7 @@ final class EqualizerView: NSView {
 /// Island background: right click opens the menu; dragging moves it along the top edge
 /// and on release it snaps left, center or right. Pulled down, it becomes the artwork.
 private struct IslandDragArea: NSViewRepresentable {
-    final class DragView: NSView {
+    final class DragView: NSView, WindowDragSurface {
         private var startMouse = NSPoint.zero
         private var startOrigin = NSPoint.zero
 
@@ -354,6 +354,24 @@ private struct IslandDragArea: NSViewRepresentable {
 
         override func rightMouseDown(with event: NSEvent) {
             AppDelegate.shared?.showMainMenu()
+        }
+
+        /// A drag that started on the Island's text or buttons: same as from the background.
+        func takeOverDrag(from mouseDown: NSEvent) {
+            self.mouseDown(with: mouseDown)
+            window?.trackEvents(
+                matching: [.leftMouseDragged, .leftMouseUp],
+                timeout: NSEvent.foreverDuration,
+                mode: .eventTracking
+            ) { [weak self] event, stop in
+                guard let self, let event else { return }
+                if event.type == .leftMouseUp {
+                    self.mouseUp(with: event)
+                    stop.pointee = true
+                } else {
+                    self.mouseDragged(with: event)
+                }
+            }
         }
     }
 

@@ -38,15 +38,37 @@ struct VisualEffectBackground: NSViewRepresentable {
 
 // MARK: - Dragging the window
 
+/// A background the player is dragged by. `PlayerPanel` hands it the drags that start
+/// anywhere else on the player (the artwork, the title, a button), so the whole player
+/// works as a handle, not just the bits of bare background between the controls.
+@MainActor
+protocol WindowDragSurface: NSView {
+    /// Moves the window from now until the mouse is released.
+    func takeOverDrag(from mouseDown: NSEvent)
+}
+
+/// Marks a control that drags by itself (the scrub bars): a drag that starts on it never
+/// moves the window. Invisible to clicks.
+struct NoWindowDrag: NSViewRepresentable {
+    final class Marker: NSView {
+        override func hitTest(_ point: NSPoint) -> NSView? { nil }
+    }
+
+    func makeNSView(context: Context) -> Marker { Marker() }
+    func updateNSView(_ view: Marker, context: Context) {}
+}
+
 /// Empty area to drag the player from. Double click: switch mode.
 /// Right click: the menu. Sits below the controls, which get their clicks first.
 struct WindowDragArea: NSViewRepresentable {
     var onDoubleClick: () -> Void = {}
     var onRightClick: (() -> Void)? = nil
 
-    final class DragView: NSView {
+    final class DragView: NSView, WindowDragSurface {
         var onDoubleClick: () -> Void = {}
         var onRightClick: (() -> Void)?
+
+        func takeOverDrag(from mouseDown: NSEvent) { drag(from: mouseDown) }
 
         override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
@@ -228,6 +250,7 @@ struct ScrubBar: View {
             .animation(Theme.press, value: active)
         }
         .frame(height: 16 * scale)
+        .background(NoWindowDrag())
     }
 }
 
