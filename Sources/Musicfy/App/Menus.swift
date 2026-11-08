@@ -121,17 +121,10 @@ enum Menus {
             menu.addItem(.separator())
         }
 
-        // Small artwork hides shuffle, repeat and volume from the player: they're here instead.
-        // Mini artwork shows only play/pause, so previous and next come here too.
-        if app.panelModel.mode == .artwork, app.panelModel.artworkDensity <= .small, let state = player.state {
-            if app.panelModel.artworkDensity == .mini {
-                menu.add("Previous", icon: "backward.fill") { player.previous() }
-                menu.add("Next", icon: "forward.fill") { player.next() }
-            }
-            menu.add("Shuffle", checked: state.shuffle, icon: "shuffle") { player.toggleShuffle() }
-            menu.add("Repeat", checked: state.repeatMode != .off, icon: state.repeatMode == .one ? "repeat.1" : "repeat") {
-                player.cycleRepeat()
-            }
+        // Small artwork hides shuffle, repeat and volume from the player, and mini artwork
+        // everything but play/pause: one playback card and the volume take their place.
+        if app.panelModel.mode == .artwork, app.panelModel.artworkDensity <= .small, player.state != nil {
+            menu.addItem(viewItem(MenuTransportView(player: player)))
             menu.addItem(volumeItem(player: player))
             menu.addItem(.separator())
         }
@@ -157,7 +150,7 @@ enum Menus {
         menu.add("Shrink When Paused", checked: settings.idleBehavior == .compact) {
             settings.idleBehavior = settings.idleBehavior == .compact ? .stay : .compact
         }
-        menu.add("Show Over Full-Screen Video", checked: settings.showOverFullScreen) {
+        menu.add("Show Over Videos", checked: settings.showOverFullScreen) {
             settings.showOverFullScreen.toggle()
         }
         let login = SMAppService.mainApp
