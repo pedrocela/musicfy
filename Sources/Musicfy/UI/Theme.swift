@@ -83,6 +83,13 @@ enum Theme {
     /// Morph to and from the Island. The SwiftUI side uses the same curve as the window frame.
     static let morphDuration: TimeInterval = 0.52
     static let morph = Animation.timingCurve(0.22, 1, 0.36, 1, duration: morphDuration)
+    /// The Island opens after the pointer rests this long, and closes this long after it leaves.
+    static let islandOpenDelay: TimeInterval = 0.06
+    static let islandCloseDelay: TimeInterval = 0.2
+    /// Opening and closing the Island: quicker than the mode changes.
+    static let islandSpring = Animation.spring(response: 0.3, dampingFraction: 0.84)
+    /// The Island's content fades in just behind the shape.
+    static let islandContentIn = Animation.easeOut(duration: 0.16).delay(0.04)
     /// How long the controls stay after the mouse leaves.
     static let hoverExitDelay: TimeInterval = 0.3
 }

@@ -762,10 +762,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                 islandCollapseWork?.cancel()
                 islandCollapseWork = nil
                 if !panelModel.islandExpanded {
-                    // Opens if the mouse stays 0.15 s: passing over doesn't unfold it.
+                    // Opens after a brief rest: brushing past doesn't unfold it.
                     let since = islandHoverSince ?? Date()
                     islandHoverSince = since
-                    if Date().timeIntervalSince(since) >= 0.15 { panelModel.islandExpanded = true }
+                    if Date().timeIntervalSince(since) >= Theme.islandOpenDelay { panelModel.islandExpanded = true }
                 }
             } else {
                 islandHoverSince = nil
@@ -779,7 +779,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                         }
                     }
                     islandCollapseWork = work
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.6, execute: work)
+                    DispatchQueue.main.asyncAfter(deadline: .now() + Theme.islandCloseDelay, execute: work)
                 }
             }
             return

@@ -31,14 +31,14 @@ struct IslandView: View {
                 if expanded {
                     expandedContent
                         .transition(.asymmetric(
-                            insertion: .opacity.animation(Theme.fade.delay(0.1)),
-                            removal: .opacity.animation(.easeOut(duration: 0.1))
+                            insertion: .opacity.animation(Theme.islandContentIn),
+                            removal: .opacity.animation(.easeOut(duration: 0.08))
                         ))
                 } else {
                     collapsedContent
                         .transition(.asymmetric(
-                            insertion: .opacity.animation(Theme.fade.delay(0.12)),
-                            removal: .opacity.animation(.easeOut(duration: 0.1))
+                            insertion: .opacity.animation(Theme.islandContentIn),
+                            removal: .opacity.animation(.easeOut(duration: 0.08))
                         ))
                 }
             }
@@ -49,7 +49,7 @@ struct IslandView: View {
             .overlay(shape.strokeBorder(Color.white.opacity(0.28 * panel.islandPull), lineWidth: 1))
             .scaleEffect(1 + 0.08 * panel.islandPull, anchor: .top)
             .shadow(color: .black.opacity(expanded ? 0.32 : 0.22), radius: expanded ? 20 : 10, y: expanded ? 10 : 4)
-            .animation(Theme.smooth, value: expanded)
+            .animation(Theme.islandSpring, value: expanded)
             Spacer(minLength: 0)
         }
         .padding(.horizontal, Theme.islandShadowMargin)
