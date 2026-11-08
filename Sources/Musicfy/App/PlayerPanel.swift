@@ -16,7 +16,7 @@ final class PlayerPanel: NSPanel {
         // On every Space, full-screen ones too: whether it steps aside for a full-screen
         // video is the app's call (see FullScreen). Managed: it joins the Mission Control
         // spread like any window (stationary kept it frozen in place).
-        collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .managed, .ignoresCycle]
+        collectionBehavior = Self.everySpace
         hidesOnDeactivate = false
         isOpaque = false
         backgroundColor = .clear
@@ -29,6 +29,26 @@ final class PlayerPanel: NSPanel {
         // A click makes it key (without activating the app), so the keyboard
         // shortcuts below work right after clicking the player.
         becomesKeyOnlyIfNeeded = false
+    }
+
+    static let everySpace: NSWindow.CollectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .managed, .ignoresCycle]
+
+    /// When a full-screen Space closes, macOS moves every hidden window of the app (ordered
+    /// out or at alpha 0) to the first desktop and keeps it there, even one that asked for
+    /// every Space. Setting the behavior again before showing puts it back on all of them.
+    func reassertAllSpaces() {
+        collectionBehavior = []
+        collectionBehavior = Self.everySpace
+    }
+
+    /// Same, for a player already on screen that got left behind on another desktop.
+    func rejoinAllSpaces() {
+        guard isVisible, !isOnActiveSpace else { return }
+        reassertAllSpaces()
+        let alpha = alphaValue
+        orderOut(nil)
+        orderFrontRegardless()
+        alphaValue = alpha
     }
 
     /// Playback keys while the player has the keyboard.

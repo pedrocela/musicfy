@@ -36,7 +36,12 @@ final class IslandGhost {
     /// `closeness` from 0 (far) to 1 (on it); `armed` when letting go would make the Island.
     func show(at frame: NSRect, closeness: CGFloat, armed: Bool) {
         if window.frame != frame { window.setFrame(frame, display: false) }
-        if !window.isVisible { window.orderFrontRegardless() }
+        if !window.isVisible {
+            // A hidden window can be pinned to one desktop after a full-screen Space closes.
+            window.collectionBehavior = []
+            window.collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle]
+            window.orderFrontRegardless()
+        }
         let alpha = armed ? 1 : 0.5 * closeness
         if abs(window.alphaValue - alpha) > 0.01 { window.alphaValue = alpha }
         if model.armed != armed {

@@ -1195,6 +1195,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
         placePanel(for: panelModel.mode)
         panel.alphaValue = 0
+        panel.reassertAllSpaces()
         panel.orderFrontRegardless()
         fade(to: 1, duration: 0.25)
         player.panelVisible = true
@@ -1284,6 +1285,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         ] {
             center.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
                 MainActor.assumeIsolated {
+                    self?.panel.rejoinAllSpaces()
                     self?.checkFullScreen()
                     // Entering full screen animates; look again once it has settled.
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
