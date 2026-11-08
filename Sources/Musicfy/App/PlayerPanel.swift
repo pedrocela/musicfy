@@ -101,8 +101,85 @@ final class PlayerPanel: NSPanel {
             if !event.isARepeat { onPlaybackKey?(key) }
             return
         }
+        if handOffDrag(event) { return }
         super.sendEvent(event)
     }
+
+    // MARK: - Dragging from anywhere
+
+    /// A press that may turn into moving the window, if the mouse travels far enough.
+    private var pendingDrag: NSEvent?
+    /// How far the mouse travels before a press on a button becomes a drag.
+    private let dragThreshold: CGFloat = 4
+
+    /// Clicks go where they always went; a press that moves becomes a drag of the whole
+    /// window, from wherever it started, except where something drags by itself: the
+    /// background (it already moves the window), the resize edges and the scrub bars.
+    private func handOffDrag(_ event: NSEvent) -> Bool {
+        switch event.type {
+        case .leftMouseDown:
+            pendingDrag = event.clickCount == 1 && startsWindowDrag(at: event.locationInWindow) ? event : nil
+        case .leftMouseDragged:
+            guard let down = pendingDrag else { return false }
+            let dx = event.locationInWindow.x - down.locationInWindow.x
+            let dy = event.locationInWindow.y - down.locationInWindow.y
+            guard hypot(dx, dy) >= dragThreshold, let surface = dragSurface(at: down.locationInWindow) else {
+                return false
+            }
+            pendingDrag = nil
+            cancelPress(like: event)
+            surface.takeOverDrag(from: down)
+            return true
+        case .leftMouseUp:
+            pendingDrag = nil
+        default:
+            break
+        }
+        return false
+    }
+
+    private func startsWindowDrag(at point: NSPoint) -> Bool {
+        guard let frameView = contentView?.superview else { return false }
+        let hit = frameView.hitTest(point)
+        if hit is WindowDragSurface || hit is ResizeGripView { return false }
+        return !views(of: NoWindowDrag.Marker.self).contains { $0.frameInWindow.contains(point) }
+    }
+
+    /// The topmost drag surface under the point, or else any one on the player.
+    private func dragSurface(at point: NSPoint) -> WindowDragSurface? {
+        let surfaces = views(of: NSView.self).compactMap { $0 as? WindowDragSurface }.filter { !$0.isHiddenOrHasHiddenAncestor }
+        return surfaces.last { $0.frameInWindow.contains(point) } ?? surfaces.last
+    }
+
+    /// Lets go of the button under the press without clicking it: released far outside.
+    private func cancelPress(like event: NSEvent) {
+        guard let up = NSEvent.mouseEvent(
+            with: .leftMouseUp,
+            location: NSPoint(x: -10_000, y: -10_000),
+            modifierFlags: event.modifierFlags,
+            timestamp: event.timestamp,
+            windowNumber: windowNumber,
+            context: nil,
+            eventNumber: event.eventNumber,
+            clickCount: 1,
+            pressure: 0
+        ) else { return }
+        super.sendEvent(up)
+    }
+
+    private func views<T: NSView>(of type: T.Type) -> [T] {
+        var found: [T] = []
+        var stack: [NSView] = contentView.map { [$0] } ?? []
+        while let view = stack.popLast() {
+            if let match = view as? T { found.append(match) }
+            stack.append(contentsOf: view.subviews.reversed())
+        }
+        return found
+    }
+}
+
+private extension NSView {
+    var frameInWindow: NSRect { convert(bounds, to: nil) }
 }
 
 /// Space = play/pause, ⌘← = previous, ⌘→ = next.
