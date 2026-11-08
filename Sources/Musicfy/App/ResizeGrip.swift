@@ -1,4 +1,8 @@
 import AppKit
+import os
+
+/// Resize diagnostics: `log show --predicate 'subsystem == "com.pedrocela.musicfy"' --last 5m`
+let resizeLog = Logger(subsystem: "com.pedrocela.musicfy", category: "resize")
 
 /// Window edges and corners that can be pulled to resize.
 struct ResizeEdges: OptionSet {
@@ -10,7 +14,7 @@ struct ResizeEdges: OptionSet {
     static let all: ResizeEdges = [.left, .right, .top, .bottom]
 }
 
-/// Invisible layer over the player that only claims the edges (7 pt) and corners (20 pt):
+/// Invisible layer over the player that only claims the edges (10 pt) and corners (22 pt):
 /// there the cursor changes and dragging resizes. Everything else passes through to the
 /// UI below. The window is borderless, so this does by hand what a title bar window gets free.
 final class ResizeGripView: NSView {
@@ -22,9 +26,10 @@ final class ResizeGripView: NSView {
     var onResize: (ResizeEdges, CGFloat, CGFloat) -> Bool = { _, _, _ in true }
     var onEnd: () -> Void = {}
 
-    private let edgeWidth: CGFloat = 7
+    /// Wide enough to find without hunting: a borderless window has no grab area outside it.
+    private let edgeWidth: CGFloat = 10
     /// Covers the 16 pt rounded corners with room to spare.
-    private let cornerSize: CGFloat = 20
+    private let cornerSize: CGFloat = 22
     private var active: ResizeEdges = []
     private(set) var tracking = false
     private var startMouse = NSPoint.zero
@@ -128,7 +133,9 @@ final class ResizeGripView: NSView {
     // MARK: Dragging
 
     override func mouseDown(with event: NSEvent) {
-        active = edges(at: convert(event.locationInWindow, from: nil))
+        let point = convert(event.locationInWindow, from: nil)
+        active = edges(at: point)
+        resizeLog.notice("down at \(Int(point.x), privacy: .public),\(Int(point.y), privacy: .public) in \(Int(self.bounds.width), privacy: .public)x\(Int(self.bounds.height), privacy: .public) edges=\(self.active.rawValue, privacy: .public) allowed=\(self.allowedEdges().rawValue, privacy: .public)")
         guard !active.isEmpty else { return }
         tracking = true
         startMouse = NSEvent.mouseLocation
