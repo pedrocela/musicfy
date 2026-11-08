@@ -1,6 +1,6 @@
 # Musicfy
 
-A floating player for **Music and Spotify** on macOS. Always in view: above every
+A floating player for **Music, Spotify and Podcasts** on macOS. Always in view: above every
 window and on every Space, also over full-screen apps. It steps aside while a video plays
 in full screen on its display, and comes back when that full screen ends (unless you turn
 on "Show Over Videos"). It shows whatever is playing in either app.
@@ -55,6 +55,12 @@ To start it automatically: menu → "Open at Login".
 - It reads and controls the apps with **AppleScript** (the only thing Music and Spotify
   allow from outside). It never launches them: every script first checks that the app
   is running. Commands jump ahead of state reads, so buttons respond right away.
+- **Podcasts** has no AppleScript, so it's read from the system's Now Playing
+  (MediaRemote), the same thing Control Center shows. Since macOS 15.4 MediaRemote only
+  answers Apple's own binaries, so a tiny library (`Helper/NowPlaying.m`) runs inside
+  `/usr/bin/perl` while Podcasts is open, pushes a line whenever the episode changes and
+  takes play, pause and seek commands back. In Podcasts the skip buttons (and ⌘← ⌘→)
+  jump back 15 s and ahead 30 s; there's no volume, shuffle, repeat, lyrics or queue.
 - It hears about changes instantly through the notifications both apps post, and also
   reads the state every 1.5 s while a song plays on screen (every 4 s when paused or
   hidden). Between reads, Core Animation moves the progress bar and the Island's ring by
@@ -69,8 +75,9 @@ To start it automatically: menu → "Open at Login".
 ## Code
 
 ```
+Helper/     the Now Playing reader for Podcasts (Objective-C, loaded by perl)
 Sources/Musicfy/
   App/      floating window, menu bar, menus, modes, resizing and mouse
-  Engine/   Music and Spotify, state, artwork, glass, colors, lyrics, audio output
+  Engine/   Music, Spotify and Podcasts, state, artwork, glass, colors, lyrics, audio output
   UI/       SwiftUI views; Theme.swift holds sizes, colors and motion
 ```

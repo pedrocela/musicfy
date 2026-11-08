@@ -15,6 +15,14 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN_DIR/Musicfy" "$APP/Contents/MacOS/Musicfy"
 cp Resources/Info.plist "$APP/Contents/Info.plist"
 
+# The Now Playing reader for Podcasts: a small library that /usr/bin/perl loads, because
+# MediaRemote only answers Apple's own binaries (see Helper/NowPlaying.m).
+mkdir -p "$APP/Contents/Frameworks"
+clang -dynamiclib -fobjc-arc -O2 -arch "$ARCH" -mmacosx-version-min=14.0 \
+  -framework Foundation -o "$APP/Contents/Frameworks/MusicfyNowPlaying.dylib" Helper/NowPlaying.m
+codesign --force --sign - "$APP/Contents/Frameworks/MusicfyNowPlaying.dylib"
+cp Resources/now-playing.pl "$APP/Contents/Resources/now-playing.pl"
+
 # Redraw the icon when it is missing or its drawing changed.
 if [ ! -f build/AppIcon.icns ] || [ tools/make-icon.swift -nt build/AppIcon.icns ]; then
   rm -rf build/AppIcon.iconset

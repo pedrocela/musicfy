@@ -2,7 +2,8 @@ import SwiftUI
 
 // MARK: - Source glyph
 
-/// Which app is playing, as a glyph: Music's pink note or Spotify's green disc.
+/// Which app is playing, as a glyph: Music's pink note, Spotify's green disc or Podcasts'
+/// purple waves.
 /// Over the artwork it sits in a 28 pt glass circle; in compact it stands alone.
 /// Clicking it brings the app to the front.
 struct SourceChip: View {
@@ -62,6 +63,10 @@ struct SourceGlyph: View {
                     .stroke(Color.black.opacity(0.85), style: StrokeStyle(lineWidth: side * 0.09, lineCap: .round))
             }
             .frame(width: side, height: side)
+        case .podcasts:
+            Image(systemName: "antenna.radiowaves.left.and.right")
+                .font(.system(size: size * 0.92, weight: .semibold))
+                .foregroundStyle(Theme.sourceColor(.podcasts))
         }
     }
 }
@@ -213,6 +218,9 @@ struct TransportRow: View {
     var body: some View {
         let state = player.state
         let playing = state?.isPlaying ?? false
+        let kind = state?.source ?? .music
+        // Podcasts has no shuffle or repeat: the places stay, empty, so nothing shifts.
+        let modes = kind.hasPlayModes
         HStack(spacing: 0) {
             if showsModes {
                 IconButton(
@@ -223,15 +231,17 @@ struct TransportRow: View {
                     active: state?.shuffle == true,
                     action: { player.toggleShuffle() }
                 )
+                .opacity(modes ? 1 : 0)
+                .allowsHitTesting(modes)
                 Spacer(minLength: 0)
             } else {
                 Spacer(minLength: 0)
             }
-            IconButton(symbol: "backward.fill", size: skipSize, help: "Previous", action: { player.previous() })
+            IconButton(symbol: kind.previousSymbol, size: skipSize, help: kind.previousHelp, action: { player.previous() })
             if showsModes { Spacer(minLength: 0) } else { Spacer().frame(width: 18) }
             IconButton(symbol: playing ? "pause.fill" : "play.fill", size: playSize, help: "Play/Pause", action: { player.playPause() })
             if showsModes { Spacer(minLength: 0) } else { Spacer().frame(width: 18) }
-            IconButton(symbol: "forward.fill", size: skipSize, help: "Next", action: { player.next() })
+            IconButton(symbol: kind.nextSymbol, size: skipSize, help: kind.nextHelp, action: { player.next() })
             Spacer(minLength: 0)
             if showsModes {
                 IconButton(
@@ -242,6 +252,8 @@ struct TransportRow: View {
                     active: state.map { $0.repeatMode != .off } ?? false,
                     action: { player.cycleRepeat() }
                 )
+                .opacity(modes ? 1 : 0)
+                .allowsHitTesting(modes)
             }
         }
         .frame(height: rowHeight)
@@ -266,8 +278,9 @@ struct ToolbarIcons: View {
     @Environment(\.uiScale) private var scale
 
     var body: some View {
+        let kind = player.state?.source
         HStack(spacing: 0) {
-            if settings.showLyricsButton {
+            if settings.showLyricsButton, kind?.hasLyrics != false {
                 icon(lyricsActive ? "quote.bubble.fill" : "quote.bubble", "Lyrics", active: lyricsActive) {
                     if panel.mode == .island {
                         player.lyricsVisible.toggle()
@@ -276,7 +289,7 @@ struct ToolbarIcons: View {
                     }
                 }
             }
-            if settings.showQueueButton, includesQueue, panel.mode != .island {
+            if settings.showQueueButton, includesQueue, panel.mode != .island, kind?.hasQueue != false {
                 icon("list.bullet", "Up Next", active: panel.drawer == .queue) {
                     panel.drawer = panel.drawer == .queue ? .none : .queue
                 }
@@ -284,7 +297,7 @@ struct ToolbarIcons: View {
             if settings.showOutput, includesOutput {
                 icon("airplayaudio", "Audio Output") { panel.actions.showOutputMenu() }
             }
-            if settings.showVolume {
+            if settings.showVolume, kind?.hasAppVolume != false {
                 icon(volumeSymbol, "Volume", active: panel.volumeOpen) { panel.volumeOpen.toggle() }
             }
             if let modeSwitch {
@@ -388,13 +401,14 @@ struct GlassCapsule: View {
     }
 
     private var buttons: some View {
+        let kind = player.state?.source
         let reading = [
-            settings.showLyricsButton ? Item.lyrics : nil,
-            settings.showQueueButton ? Item.queue : nil,
+            settings.showLyricsButton && kind?.hasLyrics != false ? Item.lyrics : nil,
+            settings.showQueueButton && kind?.hasQueue != false ? Item.queue : nil,
         ].compactMap { $0 }
         let sound = density >= .normal ? [
             settings.showOutput ? Item.output : nil,
-            settings.showVolume ? Item.volume : nil,
+            settings.showVolume && kind?.hasAppVolume != false ? Item.volume : nil,
         ].compactMap { $0 } : []
         let mode = density == .large ? [Item.compact] : []
         let groups = [reading, sound, mode].filter { !$0.isEmpty }
@@ -640,7 +654,7 @@ private struct SyncedLyrics: View, Equatable {
 
 // MARK: - Nothing playing and permissions
 
-/// What the player shows when neither app has a song loaded. It keeps the player's own
+/// What the player shows when no app has anything loaded. It keeps the player's own
 /// layout so it reads as the same object, just empty:
 /// - Artwork: an empty cover fills the window; the title sits where the song's would and
 ///   the app buttons where the transport goes.
@@ -733,8 +747,19 @@ struct EmptyStateView: View {
                     .lineLimit(1)
                     .minimumScaleFactor(0.85)
                     .padding(.top, 2)
-                buttons(height: 28, fill: false)
-                    .padding(.top, 10)
+                // Three labeled buttons don't fit beside the cover: glyphs instead.
+                Group {
+                    if player.installedSources.count > 2 {
+                        HStack(spacing: 6) {
+                            ForEach(player.installedSources) { kind in
+                                SourceButton(kind: kind, style: .glyph) { player.open(kind) }
+                            }
+                        }
+                    } else {
+                        buttons(height: 28, fill: false)
+                    }
+                }
+                .padding(.top, 10)
             }
             Spacer(minLength: 0)
         }
@@ -872,6 +897,12 @@ struct EmptyCover: View {
                     RadialGradient(
                         colors: [Theme.sourceColor(.spotify).opacity(0.18), .clear],
                         center: .bottomTrailing, startRadius: 0, endRadius: reach
+                    )
+                }
+                if sources.contains(.podcasts) {
+                    RadialGradient(
+                        colors: [Theme.sourceColor(.podcasts).opacity(0.20), .clear],
+                        center: .bottomLeading, startRadius: 0, endRadius: reach * 0.8
                     )
                 }
                 LinearGradient(colors: [Color.white.opacity(0.07), .clear], startPoint: .top, endPoint: .center)
