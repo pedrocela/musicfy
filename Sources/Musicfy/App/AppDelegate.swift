@@ -426,8 +426,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         return keptOnScreen(frame)
     }
 
-    /// The usable area of the screen a frame is on (or the one under the mouse while
-    /// dragging), less a small margin. The player never leaves it.
+    /// The area of the screen a frame is on (or the one under the mouse while dragging)
+    /// below the menu bar, less a small margin. The player never leaves it.
     private func usableArea(for frame: NSRect, near point: NSPoint? = nil) -> NSRect {
         let screens = NSScreen.screens
         let byPoint = point.flatMap { p in screens.first { NSMouseInRect(p, $0.frame, false) } }
@@ -436,7 +436,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             return x.width * x.height < y.width * y.height
         }
         let screen = byPoint ?? byOverlap ?? NSScreen.main ?? screens[0]
-        return screen.visibleFrame.insetBy(dx: Theme.screenMargin, dy: Theme.screenMargin)
+        // The whole screen except the menu bar: the player floats above the Dock, so the
+        // Dock's reserved strip (or the sliver an auto-hidden Dock keeps) doesn't stop it.
+        var area = screen.frame
+        area.size.height = screen.visibleFrame.maxY - area.minY
+        return area.insetBy(dx: Theme.screenMargin, dy: Theme.screenMargin)
     }
 
     /// The same frame, slid back inside the screen's usable area.
