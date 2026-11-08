@@ -5,9 +5,13 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
-ARCH="$(uname -m)"
-swift build -c release --arch "$ARCH"
-BIN_DIR="$(swift build -c release --arch "$ARCH" --show-bin-path)"
+# This Mac's architecture by default. ARCHS="arm64 x86_64" makes a universal app for
+# Apple silicon and Intel (CI does that; it needs full Xcode, not just the command line tools).
+read -ra ARCHS <<< "${ARCHS:-$(uname -m)}"
+SWIFT_ARCHS=(); CLANG_ARCHS=()
+for a in "${ARCHS[@]}"; do SWIFT_ARCHS+=(--arch "$a"); CLANG_ARCHS+=(-arch "$a"); done
+swift build -c release "${SWIFT_ARCHS[@]}"
+BIN_DIR="$(swift build -c release "${SWIFT_ARCHS[@]}" --show-bin-path)"
 
 APP=build/Musicfy.app
 rm -rf "$APP"
@@ -27,7 +31,7 @@ fi
 # The Now Playing reader for Podcasts: a small library that /usr/bin/perl loads, because
 # MediaRemote only answers Apple's own binaries (see Helper/NowPlaying.m).
 mkdir -p "$APP/Contents/Frameworks"
-clang -dynamiclib -fobjc-arc -O2 -arch "$ARCH" -mmacosx-version-min=14.0 \
+clang -dynamiclib -fobjc-arc -O2 "${CLANG_ARCHS[@]}" -mmacosx-version-min=14.0 \
   -framework Foundation -o "$APP/Contents/Frameworks/MusicfyNowPlaying.dylib" Helper/NowPlaying.m
 codesign --force --sign - "$APP/Contents/Frameworks/MusicfyNowPlaying.dylib"
 cp Resources/now-playing.pl "$APP/Contents/Resources/now-playing.pl"
