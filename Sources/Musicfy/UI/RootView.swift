@@ -19,6 +19,10 @@ struct RootView: View {
                     // Dragged to the top center: it shrinks a little toward the top, hinting at the Island.
                     .scaleEffect(panel.islandHint ? 0.94 : 1, anchor: .top)
                     .opacity(panel.islandHint ? 0.85 : 1)
+                    // During a live resize, drawn at its rect inside the still window.
+                    .frame(width: panel.liveRect?.width, height: panel.liveRect?.height)
+                    .offset(x: panel.liveRect?.minX ?? 0, y: panel.liveRect?.minY ?? 0)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                     .transition(.opacity)
             }
         }
@@ -30,6 +34,10 @@ struct RootView: View {
     /// made the artwork jump inside the window.
     private func baseHeight(in size: CGSize) -> CGFloat {
         guard panel.mode == .artwork else { return Theme.compactSize.height }
+        // Squashed into compact with a panel open below: the panel keeps its height.
+        if panel.squash > 0, panel.drawer != .none {
+            return panel.artworkSide + (Theme.compactSize.height - panel.artworkSide) * panel.squash
+        }
         // Square; shorter only while being squashed into compact. A panel below adds height.
         return min(size.width, size.height)
     }
@@ -77,6 +85,7 @@ struct RootView: View {
         if panel.mode == .compact, panel.grow > 0 {
             ArtworkFill(image: player.artwork)
                 .opacity(Double(panel.grow))
+                .padding(.bottom, panel.drawer == .none ? 0 : Theme.drawerHeight) // not over the panel below
                 .allowsHitTesting(false)
         } else if panel.mode == .artwork, panel.squash > 0 {
             VStack(spacing: 0) {
