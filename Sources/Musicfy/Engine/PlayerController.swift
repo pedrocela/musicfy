@@ -49,6 +49,10 @@ final class PlayerController: ObservableObject {
     private var startedAt: [SourceKind: Date] = [:]
     private var timer: Timer?
     private var refreshing = false
+    /// After play or pause, what the button promised and until when. The apps take a moment
+    /// to start or stop (Music buffers), and a read in between still reports the old state:
+    /// trusting it made the icon flip back and forth.
+    private var promisedPlaying: (source: SourceKind, playing: Bool, until: Date)?
     private var refreshAgain = false
     /// Bumped by every command: a read that started earlier is dropped (it would bring the old state).
     private var generation = 0
@@ -131,8 +135,15 @@ final class PlayerController: ObservableObject {
         var newProblem = problem
         for (kind, result) in results {
             switch result {
-            case .success(let fresh):
+            case .success(var fresh):
                 if newProblem?.source == kind { newProblem = nil }
+                if let promise = promisedPlaying, promise.source == kind, let read = fresh?.isPlaying {
+                    if read == promise.playing || Date() > promise.until {
+                        promisedPlaying = nil // confirmed, or the app really didn't follow
+                    } else {
+                        fresh?.isPlaying = promise.playing
+                    }
+                }
                 let wasPlaying = lastStates[kind]?.isPlaying ?? false
                 if let fresh, fresh.isPlaying, !wasPlaying { startedAt[kind] = Date() }
                 lastStates[kind] = fresh
@@ -275,7 +286,10 @@ final class PlayerController: ObservableObject {
     func playPause() {
         guard let source = activeSource else { return }
         update { $0.isPlaying.toggle() }
-        if state?.isPlaying == true, let kind = state?.source { startedAt[kind] = Date() }
+        if let state {
+            promisedPlaying = (state.source, state.isPlaying, Date().addingTimeInterval(2))
+            if state.isPlaying { startedAt[state.source] = Date() }
+        }
         source.playPause()
         refreshSoon()
     }
