@@ -11,8 +11,25 @@ final class PanelModel: ObservableObject {
     @Published var islandExpanded = false
     /// Panel que se abre debajo del player (tapa y compacto), como en Music.
     @Published var drawer: Drawer = .none
+    /// Dónde se pega la Isla en el borde de arriba.
+    @Published var islandAlignment: IslandAlignment =
+        IslandAlignment(rawValue: UserDefaults.standard.string(forKey: "islandAlignment") ?? "") ?? .center {
+        didSet { UserDefaults.standard.set(islandAlignment.rawValue, forKey: "islandAlignment") }
+    }
 
     var actions = PanelActions()
+}
+
+enum IslandAlignment: String {
+    case leading, center, trailing
+
+    var horizontal: HorizontalAlignment {
+        switch self {
+        case .leading: return .leading
+        case .center: return .center
+        case .trailing: return .trailing
+        }
+    }
 }
 
 enum Drawer: Equatable {

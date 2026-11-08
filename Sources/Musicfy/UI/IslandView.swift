@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// Modo Isla: cápsula de 300 × 44 arriba al centro de la pantalla. Al pasar
-/// el mouse se abre hacia abajo (380 × 176) con los controles.
+/// Modo Isla: cápsula de 300 × 40 centrada debajo de la barra de menú. Al dejar
+/// el mouse encima se abre hacia abajo (380 × 168) con los controles.
 ///
 /// La ventana tiene siempre el tamaño de la Isla abierta (más el margen de la
 /// sombra); lo que se anima es la cápsula adentro. La app deja pasar los clics
@@ -17,96 +17,83 @@ struct IslandView: View {
 
     var body: some View {
         let size = expanded ? Theme.islandExpanded : Theme.islandCollapsed
-        let radius: CGFloat = expanded ? 28 : 22
-        VStack(spacing: 0) {
+        let shape = RoundedRectangle(cornerRadius: expanded ? Theme.islandOpenRadius : Theme.islandRadius, style: .continuous)
+        VStack(alignment: panel.islandAlignment.horizontal, spacing: 0) {
             ZStack(alignment: .top) {
+                Theme.islandFill
+                LinearGradient(colors: [Color.white.opacity(0.06), .clear], startPoint: .top, endPoint: .center)
+                    .allowsHitTesting(false)
+                IslandDragArea()
                 if expanded {
                     expandedContent
                         .transition(.asymmetric(
-                            insertion: .opacity.animation(Theme.fade.delay(0.08)),
-                            removal: .opacity.animation(.easeOut(duration: 0.12))
+                            insertion: .opacity.animation(Theme.fade.delay(0.1)),
+                            removal: .opacity.animation(.easeOut(duration: 0.1))
                         ))
                 } else {
                     collapsedContent
                         .transition(.asymmetric(
-                            insertion: .opacity.animation(Theme.fade.delay(0.1)),
+                            insertion: .opacity.animation(Theme.fade.delay(0.12)),
                             removal: .opacity.animation(.easeOut(duration: 0.1))
                         ))
                 }
             }
             .frame(width: size.width, height: size.height, alignment: .top)
-            .background(
-                RoundedRectangle(cornerRadius: radius, style: .continuous)
-                    .fill(expanded ? Theme.islandOpenFill : Theme.islandFill)
-            )
-            .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: radius, style: .continuous)
-                    .strokeBorder(accent.opacity(playing ? 0.28 : 0.12), lineWidth: 1)
-            )
-            .shadow(color: .black.opacity(expanded ? 0.38 : 0.3), radius: expanded ? 22 : 14, y: 10)
+            .clipShape(shape)
+            .overlay(shape.strokeBorder(Theme.islandStroke, lineWidth: 0.5))
+            .shadow(color: .black.opacity(expanded ? 0.32 : 0.22), radius: expanded ? 20 : 10, y: expanded ? 10 : 4)
             .animation(Theme.smooth, value: expanded)
-            .animation(Theme.crossfade, value: player.palette)
             Spacer(minLength: 0)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .padding(.horizontal, Theme.islandShadowMargin)
+        .frame(
+            maxWidth: .infinity,
+            maxHeight: .infinity,
+            alignment: Alignment(horizontal: panel.islandAlignment.horizontal, vertical: .top)
+        )
         .environment(\.colorScheme, .dark)
     }
 
     // MARK: Cerrada
 
     private var collapsedContent: some View {
-        ZStack(alignment: .bottom) {
-            HStack(spacing: 10) {
-                thumbnail(side: 32, radius: 10)
-                    .saturation(playing ? 1 : 0.3)
-                    .brightness(playing ? 0 : -0.08)
-                VStack(alignment: .leading, spacing: 1) {
-                    if let state = player.state {
-                        MarqueeText(
-                            text: state.title,
-                            font: Theme.islandTitle,
-                            color: playing ? Theme.primary : Color.white.opacity(0.8),
-                            height: 16
-                        )
-                        if playing {
-                            SubtitleLine(player: player, font: Theme.islandSubtitle, height: 14, text: islandSubtitle(state), showsLyric: true)
-                        } else {
-                            Text("En pausa")
-                                .font(Theme.islandSubtitle)
-                                .foregroundStyle(Color.white.opacity(0.6))
-                                .frame(height: 14)
-                        }
+        HStack(spacing: 10) {
+            thumbnail(side: 28, radius: 8)
+                .saturation(playing ? 1 : 0.35)
+                .opacity(playing ? 1 : 0.8)
+            VStack(alignment: .leading, spacing: 0) {
+                if let state = player.state {
+                    MarqueeText(
+                        text: state.title,
+                        font: Theme.islandTitle,
+                        color: playing ? Theme.primary : Color.white.opacity(0.82),
+                        height: 16
+                    )
+                    if playing {
+                        SubtitleLine(player: player, font: Theme.islandSubtitle, height: 14, text: islandSubtitle(state), showsLyric: true)
                     } else {
-                        Text("Nada sonando")
-                            .font(Theme.islandTitle)
-                            .foregroundStyle(Color.white.opacity(0.8))
+                        Text("En pausa")
+                            .font(Theme.islandSubtitle)
+                            .foregroundStyle(Color.white.opacity(0.55))
+                            .frame(height: 14)
                     }
-                }
-                .id(player.state?.trackKey ?? "")
-                .transition(.opacity)
-                .animation(Theme.crossfade, value: player.state?.trackKey)
-                Spacer(minLength: 0)
-                if playing {
-                    Equalizer(color: accent)
-                        .transition(.opacity.combined(with: .scale(scale: 0.6)))
-                } else if player.state != nil {
-                    Image(systemName: "play.fill")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(Color.white.opacity(0.7))
-                        .transition(.opacity.combined(with: .scale(scale: 0.6)))
+                } else {
+                    Text("Nada sonando")
+                        .font(Theme.islandTitle)
+                        .foregroundStyle(Color.white.opacity(0.75))
                 }
             }
-            .animation(Theme.smooth, value: playing)
-            .padding(.leading, 6)
-            .padding(.trailing, 16)
-            .frame(maxHeight: .infinity)
+            .id(player.state?.trackKey ?? "")
+            .transition(.opacity.combined(with: .offset(y: 6)))
+            .animation(Theme.crossfade, value: player.state?.trackKey)
+            .allowsHitTesting(false)
 
             if player.state != nil {
-                ProgressThread(player: player, color: playing ? accent : Color.white.opacity(0.45))
-                    .padding(.horizontal, 22)
+                ProgressRing(player: player, playing: playing, accent: accent)
             }
         }
+        .padding(.leading, 6)
+        .padding(.trailing, 9)
         .frame(width: Theme.islandCollapsed.width, height: Theme.islandCollapsed.height)
     }
 
@@ -125,40 +112,41 @@ struct IslandView: View {
                 EmptyStateView(player: player)
                     .frame(maxHeight: .infinity)
             } else {
-                HStack(spacing: 12) {
-                    thumbnail(side: 60, radius: 14)
+                HStack(alignment: .top, spacing: 12) {
+                    thumbnail(side: 56, radius: 12)
                     VStack(alignment: .leading, spacing: 2) {
                         MarqueeText(text: player.state?.title ?? "", font: Theme.islandOpenTitle, color: Theme.primary, height: 19)
                         SubtitleLine(player: player, font: Theme.compactSubtitle, height: 16, showsLyric: true)
                     }
+                    .frame(height: 56)
                     .id(player.state?.trackKey ?? "")
-                    .transition(.opacity)
+                    .transition(.opacity.combined(with: .offset(y: 6)))
                     .animation(Theme.crossfade, value: player.state?.trackKey)
-                    Spacer(minLength: 0)
                     ToolbarIcons(
                         player: player,
                         settings: settings,
                         panel: panel,
-                        iconSize: 14,
-                        cell: 30,
-                        tint: Color.white.opacity(0.82)
+                        iconSize: 13,
+                        cell: 28,
+                        tint: Color.white.opacity(0.85)
                     )
                 }
                 ZStack {
                     if panel.volumeOpen {
-                        VolumeBar(player: player, fill: accent).transition(.opacity)
+                        VolumeBar(player: player).transition(.opacity)
                     } else {
-                        TimeBar(player: player, fill: accent).transition(.opacity)
+                        TimeBar(player: player).transition(.opacity)
                     }
                 }
                 .padding(.top, 12)
                 .animation(Theme.fade, value: panel.volumeOpen)
-                TransportRow(player: player, size: .medium, showsModes: false)
-                    .padding(.top, 2)
+                TransportRow(player: player, size: .large)
+                    .padding(.top, 4)
+                    .padding(.horizontal, 4)
             }
         }
         .padding(.top, 16)
-        .padding(.horizontal, 18)
+        .padding(.horizontal, 16)
         .padding(.bottom, 8)
         .frame(width: Theme.islandExpanded.width, height: Theme.islandExpanded.height, alignment: .top)
     }
@@ -167,49 +155,108 @@ struct IslandView: View {
         ZStack { CrossfadingArtwork(player: player) }
             .frame(width: side, height: side)
             .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: radius, style: .continuous)
+                    .strokeBorder(Color.white.opacity(0.1), lineWidth: 0.5)
+            )
+            .allowsHitTesting(false)
     }
 }
 
-/// Cuatro barritas que suben y bajan mientras suena algo.
+/// A la derecha de la Isla cerrada: un anillo con el avance del tema y,
+/// adentro, tres barritas que bailan (o el ícono de play si está en pausa).
+private struct ProgressRing: View {
+    @ObservedObject var player: PlayerController
+    let playing: Bool
+    let accent: Color
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 0.5)) { context in
+            let duration = player.state?.duration ?? 0
+            let fraction = duration > 0 ? min(1, player.position(at: context.date) / duration) : 0
+            ZStack {
+                Circle()
+                    .stroke(Color.white.opacity(0.12), lineWidth: 2)
+                Circle()
+                    .trim(from: 0, to: fraction)
+                    .stroke(playing ? accent : Color.white.opacity(0.5), style: StrokeStyle(lineWidth: 2, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
+                    .animation(.linear(duration: 0.5), value: fraction)
+                ZStack {
+                    if playing {
+                        Equalizer(color: accent)
+                            .transition(.opacity.combined(with: .scale(scale: 0.5)))
+                    } else {
+                        Image(systemName: "play.fill")
+                            .font(.system(size: 8, weight: .bold))
+                            .foregroundStyle(Color.white.opacity(0.75))
+                            .offset(x: 0.5)
+                            .transition(.opacity.combined(with: .scale(scale: 0.5)))
+                    }
+                }
+                .animation(Theme.smooth, value: playing)
+            }
+            .frame(width: 22, height: 22)
+            .animation(Theme.crossfade, value: playing)
+        }
+        .allowsHitTesting(false)
+    }
+}
+
+/// Tres barritas que suben y bajan a ritmos distintos.
 private struct Equalizer: View {
     let color: Color
 
     var body: some View {
         TimelineView(.animation(minimumInterval: 1 / 30)) { context in
             let time = context.date.timeIntervalSinceReferenceDate
-            HStack(alignment: .bottom, spacing: 2) {
-                ForEach(0..<4, id: \.self) { bar in
-                    let phase = [0.0, 0.33, 0.66, 0.17][bar]
-                    let wave = 0.5 + 0.5 * sin((time / 0.9 + phase) * 2 * .pi)
-                    RoundedRectangle(cornerRadius: 1.5)
+            HStack(alignment: .center, spacing: 1.5) {
+                ForEach(0..<3, id: \.self) { bar in
+                    let speed = [1.05, 0.8, 1.3][bar]
+                    let phase = [0.0, 0.4, 0.7][bar]
+                    let wave = 0.5 + 0.5 * sin((time * speed + phase) * 2 * .pi)
+                    Capsule()
                         .fill(color)
-                        .frame(width: 3, height: 14 * (0.35 + 0.65 * wave))
+                        .frame(width: 2, height: 3 + 6 * wave)
                 }
             }
-            .frame(height: 14, alignment: .bottom)
+            .frame(height: 10)
         }
     }
 }
 
-/// El hilo de progreso en el borde de abajo de la cápsula.
-private struct ProgressThread: View {
-    @ObservedObject var player: PlayerController
-    let color: Color
+/// Fondo de la Isla: clic derecho abre el menú; arrastrar la mueve por el borde
+/// de arriba y al soltar se pega a la izquierda, al centro o a la derecha.
+private struct IslandDragArea: NSViewRepresentable {
+    final class DragView: NSView {
+        private var startMouseX: CGFloat = 0
+        private var startWindowX: CGFloat = 0
 
-    var body: some View {
-        TimelineView(.periodic(from: .now, by: 0.5)) { context in
-            let duration = player.state?.duration ?? 0
-            let fraction = duration > 0 ? min(1, player.position(at: context.date) / duration) : 0
-            GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    Rectangle().fill(Color.white.opacity(0.12))
-                    Rectangle()
-                        .fill(color)
-                        .frame(width: geo.size.width * fraction)
-                        .animation(.linear(duration: 0.5), value: fraction)
-                }
+        override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
+        override func mouseDown(with event: NSEvent) {
+            startMouseX = NSEvent.mouseLocation.x
+            startWindowX = window?.frame.minX ?? 0
+        }
+
+        override func mouseDragged(with event: NSEvent) {
+            guard let window else { return }
+            var origin = window.frame.origin
+            origin.x = startWindowX + (NSEvent.mouseLocation.x - startMouseX)
+            window.setFrameOrigin(origin)
+        }
+
+        override func mouseUp(with event: NSEvent) {
+            if abs(NSEvent.mouseLocation.x - startMouseX) > 2 {
+                AppDelegate.shared?.snapIsland()
             }
-            .frame(height: 2)
+        }
+
+        override func rightMouseDown(with event: NSEvent) {
+            AppDelegate.shared?.showMainMenu()
         }
     }
+
+    func makeNSView(context: Context) -> DragView { DragView() }
+    func updateNSView(_ view: DragView, context: Context) {}
 }

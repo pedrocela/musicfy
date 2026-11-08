@@ -27,6 +27,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var hoverExitWork: DispatchWorkItem?
     private var idleWork: DispatchWorkItem?
     private var islandCollapseWork: DispatchWorkItem?
+    private var islandHoverSince: Date?
     /// La tapa pasó a compacto porque no suena nada (no porque lo eligió el usuario).
     private var idleCompact = false
     /// Se escondió solo; vuelve cuando algo suena.
@@ -160,7 +161,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             return
         case .compact:
             guard settings.mode == .artwork, !idleCompact else { return }
-            delay = 3
+            delay = 1.5
         case .hide:
             guard isPanelVisible else { return }
             delay = 30
@@ -312,19 +313,54 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let screen = NSScreen.screens.first ?? NSScreen.main!
         let visible = screen.visibleFrame
         let size = islandWindowSize
-        return NSRect(
-            x: visible.midX - size.width / 2,
-            y: visible.maxY - Theme.islandTopGap - size.height,
-            width: size.width,
-            height: size.height
-        )
+        let margin = Theme.islandShadowMargin
+        let x: CGFloat
+        switch panelModel.islandAlignment {
+        case .leading: x = visible.minX + Theme.islandSideGap - margin
+        case .center: x = visible.midX - size.width / 2
+        case .trailing: x = visible.maxX - Theme.islandSideGap + margin - size.width
+        }
+        return NSRect(x: x, y: visible.maxY - Theme.islandTopGap - size.height, width: size.width, height: size.height)
+    }
+
+    /// Distancia del borde izquierdo de la ventana al de la cápsula.
+    private func islandPillOffset(width: CGFloat, alignment: IslandAlignment) -> CGFloat {
+        let margin = Theme.islandShadowMargin
+        switch alignment {
+        case .leading: return margin
+        case .center: return (islandWindowSize.width - width) / 2
+        case .trailing: return islandWindowSize.width - margin - width
+        }
     }
 
     /// Dónde está la cápsula dentro de la ventana de la Isla, en coordenadas de pantalla.
     private func islandPillRect() -> NSRect {
         let frame = panel.frame
         let size = panelModel.islandExpanded ? Theme.islandExpanded : Theme.islandCollapsed
-        return NSRect(x: frame.midX - size.width / 2, y: frame.maxY - size.height, width: size.width, height: size.height)
+        let x = frame.minX + islandPillOffset(width: size.width, alignment: panelModel.islandAlignment)
+        return NSRect(x: x, y: frame.maxY - size.height, width: size.width, height: size.height)
+    }
+
+    /// Al soltar la Isla después de arrastrarla: se pega a la izquierda, al centro o a la derecha.
+    func snapIsland() {
+        guard panelModel.mode == .island else { return }
+        let pill = islandPillRect()
+        let visible = (NSScreen.screens.first ?? NSScreen.main!).visibleFrame
+        let third = visible.width / 3
+        let target: IslandAlignment
+        switch pill.midX {
+        case ..<(visible.minX + third): target = .leading
+        case (visible.maxX - third)...: target = .trailing
+        default: target = .center
+        }
+        // Se cambia la alineación sin que la cápsula salte y después se la lleva a su lugar.
+        if target != panelModel.islandAlignment {
+            panelModel.islandAlignment = target
+            var frame = panel.frame
+            frame.origin.x = pill.minX - islandPillOffset(width: pill.width, alignment: target)
+            panel.setFrame(frame, display: true)
+        }
+        animateFrame(to: islandWindowRect())
     }
 
     func windowDidMove(_ notification: Notification) {
@@ -355,18 +391,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             if inside {
                 islandCollapseWork?.cancel()
                 islandCollapseWork = nil
-                if !panelModel.islandExpanded { panelModel.islandExpanded = true }
-            } else if panelModel.islandExpanded, islandCollapseWork == nil {
-                let work = DispatchWorkItem { [weak self] in
-                    Task { @MainActor in
-                        guard let self else { return }
-                        self.islandCollapseWork = nil
-                        self.panelModel.islandExpanded = false
-                        self.panelModel.volumeOpen = false
-                    }
+                if !panelModel.islandExpanded {
+                    // Se abre si el mouse se queda 0,15 s: pasar de largo no la despliega.
+                    let since = islandHoverSince ?? Date()
+                    islandHoverSince = since
+                    if Date().timeIntervalSince(since) >= 0.15 { panelModel.islandExpanded = true }
                 }
-                islandCollapseWork = work
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35, execute: work)
+            } else {
+                islandHoverSince = nil
+                if panelModel.islandExpanded, islandCollapseWork == nil {
+                    let work = DispatchWorkItem { [weak self] in
+                        Task { @MainActor in
+                            guard let self else { return }
+                            self.islandCollapseWork = nil
+                            self.panelModel.islandExpanded = false
+                            self.panelModel.volumeOpen = false
+                        }
+                    }
+                    islandCollapseWork = work
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.6, execute: work)
+                }
             }
             return
         }

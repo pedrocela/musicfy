@@ -6,12 +6,16 @@ enum Theme {
     // MARK: Medidas (puntos)
     static let artworkSize = CGSize(width: 320, height: 320)
     static let compactSize = CGSize(width: 320, height: 144)
-    static let islandCollapsed = CGSize(width: 300, height: 44)
-    static let islandExpanded = CGSize(width: 380, height: 176)
+    static let islandCollapsed = CGSize(width: 300, height: 40)
+    static let islandExpanded = CGSize(width: 380, height: 156)
+    static let islandRadius: CGFloat = 20
+    static let islandOpenRadius: CGFloat = 26
     /// La ventana de la Isla tiene lugar para la sombra alrededor de la cápsula abierta.
     static let islandShadowMargin: CGFloat = 24
     /// Distancia entre la barra de menú y la Isla.
-    static let islandTopGap: CGFloat = 6
+    static let islandTopGap: CGFloat = 8
+    /// Margen a los costados de la pantalla cuando la Isla se pega a un lado.
+    static let islandSideGap: CGFloat = 12
 
     /// Alto del panel de letras o de cola que se abre debajo.
     static let drawerHeight: CGFloat = 380
@@ -50,9 +54,9 @@ enum Theme {
     static let windowStroke = Color.white.opacity(0.12)
     /// Sombra interna de luz arriba del modo compacto.
     static let topHighlight = Color.white.opacity(0.12)
-    /// Fondo de la Isla.
-    static let islandFill = Color(red: 0.043, green: 0.039, blue: 0.039)
-    static let islandOpenFill = Color(red: 0.059, green: 0.051, blue: 0.047)
+    /// Fondo de la Isla: casi negro, un poco translúcido sobre el vidrio del sistema.
+    static let islandFill = Color(red: 0.055, green: 0.047, blue: 0.043).opacity(0.96)
+    static let islandStroke = Color.white.opacity(0.09)
 
     // MARK: Color de cada app (punto del chip)
     static func sourceColor(_ kind: SourceKind) -> Color {
