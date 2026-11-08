@@ -28,7 +28,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var mouseBackupTimer: Timer?
     private var mouseMonitors: [Any] = []
     private var lastMouse = NSPoint(x: -1, y: -1)
-    private var stillTicks = 0
+    private var mouseStillSince = Date()
+    private var mouseWatch = MouseWatch.off
     private var hoverExitWork: DispatchWorkItem?
     private var idleWork: DispatchWorkItem?
     private var islandCollapseWork: DispatchWorkItem?
@@ -803,50 +804,81 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     // MARK: - Mouse
 
-    /// While the mouse moves, its position is checked 30 times a second. It's more reliable
-    /// than AppKit tracking in a window that's never active, and lets the Island's transparent
-    /// area pass clicks through.
+    /// The mouse position is checked 30 times a second while it's near the player. It's more
+    /// reliable than AppKit tracking in a window that's never active, and lets the Island's
+    /// transparent area pass clicks through.
     ///
-    /// Once the mouse has been still for a second and nothing is waiting on time to pass, the
-    /// checking rests: the next mouse event anywhere (or a window move) wakes it on the spot,
-    /// and a slow check every half second backs that up. Resting, the app costs nothing.
+    /// Elsewhere it's checked 10 times a second, which is still in time: the mouse has to
+    /// cross 200 pt to get here. Once it has been still for a second and nothing is waiting
+    /// on time to pass, the checking stops: the next mouse event (or a window move) wakes it,
+    /// and a slow check every half second backs that up.
+    private enum MouseWatch {
+        case off, resting, slow, fast
+    }
+
     private func startMousePolling() {
-        guard mouseTimer == nil else { return }
-        stopMouseListening()
-        stillTicks = 0
-        let timer = Timer(timeInterval: 1.0 / 30, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated { self?.mouseTick() }
-        }
-        timer.tolerance = 0.004
-        RunLoop.main.add(timer, forMode: .common)
-        mouseTimer = timer
+        wakeMousePolling()
+    }
+
+    /// Any sign of life (mouse, window, mode): back to checking.
+    private func wakeMousePolling() {
+        guard mouseWatch == .off || mouseWatch == .resting else { return }
+        mouseStillSince = Date()
+        lastMouse = NSEvent.mouseLocation
+        setMouseWatch(mouseIsNear(lastMouse) ? .fast : .slow)
         pollMouse()
     }
 
-    /// Any sign of life (mouse, window, mode): back to checking 30 times a second.
-    private func wakeMousePolling() {
-        if mouseTimer == nil { startMousePolling() }
+    private func setMouseWatch(_ watch: MouseWatch) {
+        guard watch != mouseWatch else { return }
+        mouseWatch = watch
+        mouseTimer?.invalidate()
+        mouseTimer = nil
+        stopMouseListening()
+        switch watch {
+        case .off:
+            break
+        case .fast, .slow:
+            let fast = watch == .fast
+            let timer = Timer(timeInterval: fast ? 1.0 / 30 : 1.0 / 10, repeats: true) { [weak self] _ in
+                MainActor.assumeIsolated { self?.mouseTick() }
+            }
+            timer.tolerance = fast ? 0.004 : 0.02
+            RunLoop.main.add(timer, forMode: .common)
+            mouseTimer = timer
+        case .resting:
+            listenForMouse()
+        }
     }
 
     private func mouseTick() {
         let mouse = NSEvent.mouseLocation
-        if mouse == lastMouse {
-            stillTicks += 1
-        } else {
-            stillTicks = 0
+        if mouse != lastMouse {
             lastMouse = mouse
+            mouseStillSince = Date()
         }
         pollMouse()
-        guard let panel else { return }
-        if !panel.isVisible {
+        guard let panel, panel.isVisible else {
             // Hidden: nothing to follow until it shows again (showPanel wakes it).
-            restMousePolling(listening: false)
-        } else if stillTicks >= 30, mouseCanRest {
-            restMousePolling(listening: true)
+            setMouseWatch(.off)
+            return
+        }
+        if !mouseCanRest {
+            setMouseWatch(.fast)
+        } else if Date().timeIntervalSince(mouseStillSince) >= 1 {
+            setMouseWatch(.resting)
+        } else {
+            setMouseWatch(mouseIsNear(mouse) ? .fast : .slow)
         }
     }
 
-    /// Nothing that needs time to pass with the mouse still: a drag, a transition, a menu,
+    /// Within 200 pt of the player.
+    private func mouseIsNear(_ mouse: NSPoint) -> Bool {
+        guard let panel else { return false }
+        return panel.frame.insetBy(dx: -200, dy: -200).contains(mouse)
+    }
+
+    /// Nothing that needs time to pass or close attention: a drag, a transition, a menu,
     /// a button held down, or the Island waiting its moment to open.
     private var mouseCanRest: Bool {
         !draggingWindow && !transitioning && !menuOpen
@@ -854,11 +886,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             && !(islandHoverSince != nil && !panelModel.islandExpanded)
     }
 
-    private func restMousePolling(listening: Bool) {
-        mouseTimer?.invalidate()
-        mouseTimer = nil
-        stopMouseListening()
-        guard listening else { return }
+    private func listenForMouse() {
         let events: NSEvent.EventTypeMask = [
             .mouseMoved, .leftMouseDragged, .rightMouseDragged, .otherMouseDragged,
             .leftMouseDown, .rightMouseDown, .otherMouseDown, .scrollWheel,

@@ -66,6 +66,7 @@ final class PlayerController: ObservableObject {
         }
     }
     private var refreshing = false
+    private var lastFullRead = Date.distantPast
     /// After play or pause, what the button promised and until when. The apps take a moment
     /// to start or stop (Music buffers), and a read in between still reports the old state:
     /// trusting it made the icon flip back and forth.
@@ -124,21 +125,31 @@ final class PlayerController: ObservableObject {
         if let timer, timer.isValid, timer.timeInterval == interval { return }
         timer?.invalidate()
         let timer = Timer(timeInterval: interval, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated { self?.refresh() }
+            MainActor.assumeIsolated { self?.refresh(onlyRelevant: true) }
         }
         timer.tolerance = interval * 0.2
         RunLoop.main.add(timer, forMode: .common)
         self.timer = timer
     }
 
-    func refresh() {
+    /// `onlyRelevant` (the timer): read just the app on screen and any that's playing. The
+    /// other one announces it if it starts playing; it's read in full every 20 s anyway.
+    /// Every read is a round trip that also wakes the app being asked.
+    func refresh(onlyRelevant: Bool = false) {
         if refreshing {
             refreshAgain = true
             return
         }
         refreshing = true
         let startedGeneration = generation
-        let sources = self.sources
+        var sources = self.sources
+        if onlyRelevant, Date().timeIntervalSince(lastFullRead) < 20 {
+            sources = sources.filter { kind, _ in
+                kind == state?.source || lastStates[kind]?.isPlaying == true
+            }
+        } else {
+            lastFullRead = Date()
+        }
         AppleScriptRunner.shared.queue.async {
             var results: [SourceKind: Result<PlayerState?, AppleScriptRunner.Failure>] = [:]
             for (kind, source) in sources {
