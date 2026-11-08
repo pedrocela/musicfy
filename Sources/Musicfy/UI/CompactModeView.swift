@@ -24,14 +24,17 @@ struct CompactModeView: View {
                         TimeBar(player: player).transition(.opacity)
                     }
                 }
-                .padding(.top, 10)
+                .padding(.top, 12)
                 .animation(Theme.fade, value: panel.volumeOpen)
                 TransportRow(player: player, size: .medium)
-                Spacer(minLength: 0)
+                    .padding(.top, 2)
             }
-            .padding(.top, 14)
+            // 16 arriba hasta la tapita; abajo, 10 más el aire propio de los
+            // botones: a la vista, el mismo margen arriba y abajo.
+            .padding(.top, 16)
             .padding(.horizontal, 16)
-            .padding(.bottom, 4)
+            .padding(.bottom, 10)
+            .frame(maxHeight: .infinity, alignment: .top)
         }
     }
 

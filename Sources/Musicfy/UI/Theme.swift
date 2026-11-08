@@ -5,7 +5,7 @@ import SwiftUI
 enum Theme {
     // MARK: Medidas (puntos)
     static let artworkSize = CGSize(width: 320, height: 320)
-    static let compactSize = CGSize(width: 320, height: 144)
+    static let compactSize = CGSize(width: 320, height: 136)
     static let islandCollapsed = CGSize(width: 300, height: 40)
     static let islandExpanded = CGSize(width: 380, height: 156)
     static let islandRadius: CGFloat = 20
