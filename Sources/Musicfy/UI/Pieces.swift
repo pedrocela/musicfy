@@ -308,23 +308,25 @@ struct ToolbarIcons: View {
     }
 }
 
-/// The glass capsule at the top right (artwork mode). With the volume open,
-/// the capsule stretches and shows the slider instead of the icons.
+/// The glass capsule at the top right (artwork mode): [Lyrics, Up Next] | [Audio Output,
+/// Volume] | [Compact]. With the volume open, the capsule stretches and shows the slider.
 struct GlassCapsule: View {
     @ObservedObject var player: PlayerController
     @ObservedObject var settings: Settings
     @ObservedObject var panel: PanelModel
     var density: ArtworkDensity = .full
     @Environment(\.uiScale) private var scale
+    @State private var shown = false
 
     var body: some View {
+        let shape = Capsule()
         ZStack {
             if panel.volumeOpen {
                 HStack(spacing: 6 * scale) {
                     Button { panel.volumeOpen = false } label: {
-                        Image(systemName: "speaker.wave.2.fill")
-                            .font(.system(size: 13 * scale, weight: .semibold))
-                            .frame(width: 28 * scale, height: 32 * scale)
+                        TopBarIcon(symbol: "speaker.wave.2", nudge: 1)
+                            .foregroundStyle(Theme.primary)
+                            .frame(width: 28 * scale, height: 30 * scale)
                             .contentShape(Rectangle())
                     }
                     .buttonStyle(PressableStyle())
@@ -339,22 +341,145 @@ struct GlassCapsule: View {
                 }
                 .transition(.opacity.combined(with: .scale(scale: 0.9, anchor: .trailing)))
             } else {
-                ToolbarIcons(
-                    player: player,
-                    settings: settings,
-                    panel: panel,
-                    modeSwitch: density == .full ? .compact : nil,
-                    includesOutput: density == .full,
-                    includesQueue: density != .minimal
-                )
+                buttons
                     .transition(.opacity.combined(with: .scale(scale: 0.9, anchor: .trailing)))
             }
         }
-        .foregroundStyle(Theme.primary)
-        .padding(.horizontal, 4 * scale)
-        .frame(height: 32 * scale)
-        .background(GlassBackdrop(player: player, shape: Capsule()))
+        .padding(.horizontal, 3 * scale)
+        .frame(height: 30 * scale)
+        .background(
+            ZStack {
+                shape.fill(.ultraThinMaterial)
+                shape.fill(Color.black.opacity(0.42))
+            }
+            .environment(\.colorScheme, .dark)
+        )
+        .overlay(shape.strokeBorder(Color.white.opacity(0.18), lineWidth: 0.5))
+        .clipShape(shape)
+        .shadow(color: .black.opacity(0.25), radius: 4, y: 2) // 0 2 8: blur 8 is radius 4
+        .opacity(shown ? 1 : 0)
+        .offset(y: shown ? 0 : -2 * scale)
+        .onAppear { withAnimation(.easeOut(duration: 0.22)) { shown = true } }
         .animation(Theme.smooth, value: panel.volumeOpen)
+    }
+
+    private var buttons: some View {
+        let reading = [
+            settings.showLyricsButton ? Item.lyrics : nil,
+            settings.showQueueButton && density != .minimal ? Item.queue : nil,
+        ].compactMap { $0 }
+        let sound = [
+            settings.showOutput && density == .full ? Item.output : nil,
+            settings.showVolume ? Item.volume : nil,
+        ].compactMap { $0 }
+        let mode = density == .full ? [Item.compact] : []
+        let groups = [reading, sound, mode].filter { !$0.isEmpty }
+        return HStack(spacing: 0) {
+            ForEach(Array(groups.enumerated()), id: \.offset) { index, group in
+                if index > 0 {
+                    Rectangle()
+                        .fill(Color.white.opacity(0.16))
+                        .frame(width: 1, height: 14 * scale)
+                        .padding(.horizontal, 4 * scale)
+                }
+                HStack(spacing: 2 * scale) {
+                    ForEach(group, id: \.self) { item in button(item) }
+                }
+            }
+        }
+    }
+
+    private enum Item: Hashable { case lyrics, queue, output, volume, compact }
+
+    @ViewBuilder
+    private func button(_ item: Item) -> some View {
+        switch item {
+        case .lyrics:
+            TopBarButton(symbol: "quote.bubble", help: "Lyrics", active: panel.drawer == .lyrics) {
+                panel.drawer = panel.drawer == .lyrics ? .none : .lyrics
+            }
+        case .queue:
+            TopBarButton(symbol: "list.bullet", help: "Up Next", active: panel.drawer == .queue) {
+                panel.drawer = panel.drawer == .queue ? .none : .queue
+            }
+        case .output:
+            TopBarButton(symbol: "airplayaudio", help: "Audio Output") { panel.actions.showOutputMenu() }
+        case .volume:
+            TopBarButton(symbol: "speaker.wave.2", nudge: 1, help: "Volume", active: panel.volumeOpen) {
+                panel.volumeOpen.toggle()
+            }
+        case .compact:
+            TopBarButton(symbol: "arrow.down.right.and.arrow.up.left", help: "Change Mode") {
+                panel.actions.setMode(.compact)
+            }
+        }
+    }
+}
+
+/// A 13 pt outline symbol centered in a 16 × 16 box. `nudge` is an optical shift to the right.
+private struct TopBarIcon: View {
+    let symbol: String
+    var nudge: CGFloat = 0
+    @Environment(\.uiScale) private var scale
+
+    var body: some View {
+        Image(systemName: symbol)
+            .font(.system(size: 13 * scale, weight: .medium))
+            .imageScale(.small)
+            .frame(width: 16 * scale, height: 16 * scale)
+            .offset(x: nudge * scale)
+    }
+}
+
+/// One button in the top capsule: 28 × 24 with a 28 × 30 click area. At rest white 85 %;
+/// on hover a 12 % fill; pressed 18 % and 0.92 scale; active a white pill with a dark icon.
+private struct TopBarButton: View {
+    let symbol: String
+    var nudge: CGFloat = 0
+    let help: String
+    var active = false
+    let action: () -> Void
+    @State private var hovering = false
+    @Environment(\.uiScale) private var scale
+
+    var body: some View {
+        Button(action: action) {
+            EmptyView()
+        }
+        .buttonStyle(Style(symbol: symbol, nudge: nudge, active: active, hovering: hovering, scale: scale))
+        .help(help)
+        .onHover { hovering = $0 }
+        .animation(.easeOut(duration: 0.18), value: active)
+        .animation(Theme.fade, value: hovering)
+    }
+
+    private struct Style: ButtonStyle {
+        let symbol: String
+        let nudge: CGFloat
+        let active: Bool
+        let hovering: Bool
+        let scale: CGFloat
+
+        func makeBody(configuration: Configuration) -> some View {
+            let pressed = configuration.isPressed
+            let pill = RoundedRectangle(cornerRadius: 12 * scale, style: .continuous)
+            TopBarIcon(symbol: symbol, nudge: nudge)
+                .foregroundStyle(
+                    active ? Color(red: 0.102, green: 0.078, blue: 0.071) // #1A1412
+                        : Color.white.opacity(hovering || pressed ? 1 : 0.85)
+                )
+                .frame(width: 28 * scale, height: 24 * scale)
+                .background(
+                    pill.fill(
+                        active ? Color.white
+                            : Color.white.opacity(pressed ? 0.18 : hovering ? 0.12 : 0)
+                    )
+                )
+                .scaleEffect(pressed ? 0.92 : 1)
+                .animation(.easeOut(duration: 0.12), value: pressed)
+                .frame(width: 28 * scale, height: 30 * scale)
+                .contentShape(Rectangle())
+        }
     }
 }
 
