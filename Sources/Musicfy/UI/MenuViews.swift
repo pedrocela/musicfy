@@ -2,7 +2,7 @@ import SwiftUI
 
 /// The drawn part of the "…" menu: the mode selector at the top (inside an NSMenuItem.view).
 /// A well as wide as the menu (inset like its separators), three equal segments 50 high.
-/// Quiet: the chosen one is lifted and its player drawn in the accent color.
+/// The chosen one is lifted; the pictograms are the original ones (Pepe preferred them).
 struct ModeSelectorView: View {
     let current: DisplayMode
     let choose: (DisplayMode) -> Void
@@ -15,7 +15,7 @@ struct ModeSelectorView: View {
         }
         .padding(3)
         .frame(minWidth: 244, maxWidth: .infinity)
-        .frame(height: 56)
+        .frame(height: 60)
         .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(MenuInk.well))
         .padding(.horizontal, MenuInk.inset)
         .padding(.top, 4)
@@ -33,15 +33,16 @@ private struct ModeSegment: View {
     var body: some View {
         Button(action: action) {
             VStack(spacing: 4) {
-                ModePictogram(mode: mode, selected: selected)
-                    .frame(width: 30, height: 19)
+                ModePictogram(mode: mode)
+                    .frame(width: 36, height: 24)
+                    .opacity(selected || hovering ? 1 : 0.6)
                 Text(mode.label)
                     .font(.system(size: 11, weight: selected ? .semibold : .regular))
                     .foregroundStyle(Theme.ink.opacity(selected || hovering ? 0.88 : 0.6))
             }
             .padding(.bottom, 1)
             .frame(maxWidth: .infinity)
-            .frame(height: 50)
+            .frame(height: 54)
             .background(
                 RoundedRectangle(cornerRadius: 6, style: .continuous)
                     .fill(selected ? MenuInk.lifted : Theme.ink.opacity(hovering ? 0.05 : 0))
@@ -58,26 +59,24 @@ private struct ModeSegment: View {
 
 /// A tiny screen with its menu bar and the player where it sits in that mode:
 /// a square at the top right (Artwork), a bar (Compact), a pill under the menu bar (Island).
-/// Hairline screen; the player in the accent color when chosen, a soft gray otherwise.
 private struct ModePictogram: View {
     let mode: DisplayMode
-    let selected: Bool
-    private var player: Color { selected ? Color.accentColor : Theme.ink.opacity(0.45) }
+    private let player = Theme.ink
 
     var body: some View {
         ZStack(alignment: .top) {
-            RoundedRectangle(cornerRadius: 3, style: .continuous)
-                .fill(Theme.ink.opacity(0.05))
-            RoundedRectangle(cornerRadius: 3, style: .continuous)
-                .strokeBorder(Theme.ink.opacity(selected ? 0.32 : 0.22), lineWidth: 0.75)
+            RoundedRectangle(cornerRadius: 3.5, style: .continuous)
+                .fill(Theme.ink.opacity(0.08))
+            RoundedRectangle(cornerRadius: 3.5, style: .continuous)
+                .strokeBorder(Theme.ink.opacity(0.35), lineWidth: 1)
             Rectangle()
-                .fill(Theme.ink.opacity(0.16))
-                .frame(height: 2.5)
-                .padding(.horizontal, 0.75)
-                .padding(.top, 0.75)
+                .fill(Theme.ink.opacity(0.28))
+                .frame(height: 3)
+                .padding(.horizontal, 1)
+                .padding(.top, 1)
             playerShape
         }
-        .clipShape(RoundedRectangle(cornerRadius: 3, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 3.5, style: .continuous))
     }
 
     @ViewBuilder
@@ -86,22 +85,22 @@ private struct ModePictogram: View {
         case .artwork:
             RoundedRectangle(cornerRadius: 1.5, style: .continuous)
                 .fill(player)
-                .frame(width: 8, height: 8)
+                .frame(width: 10, height: 10)
                 .frame(maxWidth: .infinity, alignment: .trailing)
-                .padding(.top, 5)
+                .padding(.top, 6)
                 .padding(.trailing, 3)
         case .compact:
             RoundedRectangle(cornerRadius: 1.5, style: .continuous)
                 .fill(player)
-                .frame(width: 12, height: 4)
+                .frame(width: 15, height: 5)
                 .frame(maxWidth: .infinity, alignment: .trailing)
-                .padding(.top, 5)
+                .padding(.top, 6)
                 .padding(.trailing, 3)
         case .island:
             Capsule()
                 .fill(player)
-                .frame(width: 11, height: 3.5)
-                .padding(.top, 4.5)
+                .frame(width: 13, height: 4)
+                .padding(.top, 5)
         }
     }
 }
