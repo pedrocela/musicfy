@@ -15,6 +15,15 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN_DIR/Musicfy" "$APP/Contents/MacOS/Musicfy"
 cp Resources/Info.plist "$APP/Contents/Info.plist"
 
+# Stamp the build: the commit count as the build number and the commit itself, so the menu
+# says exactly which version is installed. Outside a git checkout it stays as it is.
+if COMMIT="$(git rev-parse --short HEAD 2>/dev/null)"; then
+  git diff --quiet HEAD -- 2>/dev/null || COMMIT="$COMMIT-dirty"
+  BUILD_NUMBER="$(git rev-list --count HEAD)"
+  /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILD_NUMBER" "$APP/Contents/Info.plist"
+  /usr/libexec/PlistBuddy -c "Add :MusicfyCommit string $COMMIT" "$APP/Contents/Info.plist"
+fi
+
 # The Now Playing reader for Podcasts: a small library that /usr/bin/perl loads, because
 # MediaRemote only answers Apple's own binaries (see Helper/NowPlaying.m).
 mkdir -p "$APP/Contents/Frameworks"

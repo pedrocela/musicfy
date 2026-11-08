@@ -15,6 +15,12 @@ let package = Package(
                 .linkedFramework("Carbon"),
                 .linkedFramework("IOKit"),
             ]
-        )
+        ),
+        // `swift test` (needs Xcode, not just the command line tools; CI runs it).
+        .testTarget(
+            name: "MusicfyTests",
+            dependencies: ["Musicfy"],
+            path: "Tests/MusicfyTests"
+        ),
     ]
 )

@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 /// Lyrics from LRCLIB (lrclib.net): free, no account, timed per line.
 struct Lyrics: Equatable {
@@ -64,23 +65,43 @@ final class LyricsLoader {
         return URLSession(configuration: config)
     }()
 
+    /// What one LRCLIB request found. `failed` (no network, a server error) is kept apart
+    /// from `missing` so a dropped connection doesn't mark the song as having no lyrics.
+    enum Lookup: Equatable {
+        case found(Lyrics)
+        case missing
+        case failed
+    }
+
     func lyrics(for state: PlayerState) async -> Lyrics? {
         let key = state.trackKey
         lock.lock()
         if let hit = cache[key] { lock.unlock(); return hit }
         lock.unlock()
 
-        var found = await exact(state)
-        if found == nil { found = await search(state) }
+        let first = await exact(state)
+        let result: Lookup
+        if case .found = first { result = first } else { result = await search(state) }
 
+        let lyrics: Lyrics?
+        switch (first, result) {
+        case (_, .found(let found)):
+            lyrics = found
+        case (.missing, .missing):
+            lyrics = nil // LRCLIB really has nothing for it
+        default:
+            // A request failed: don't remember "no lyrics", ask again next time.
+            Log.network.info("Lyrics lookup failed; not cached")
+            return nil
+        }
         lock.lock()
-        cache[key] = found
+        cache[key] = lyrics
         if cache.count > 200 { cache.removeAll() }
         lock.unlock()
-        return found
+        return lyrics
     }
 
-    private func exact(_ state: PlayerState) async -> Lyrics? {
+    private func exact(_ state: PlayerState) async -> Lookup {
         var components = URLComponents(string: "https://lrclib.net/api/get")!
         components.queryItems = [
             URLQueryItem(name: "track_name", value: state.title),
@@ -88,35 +109,58 @@ final class LyricsLoader {
             URLQueryItem(name: "album_name", value: state.album),
             URLQueryItem(name: "duration", value: String(Int(state.duration.rounded()))),
         ]
-        guard let url = components.url,
-              let (data, response) = try? await session.data(from: url),
-              (response as? HTTPURLResponse)?.statusCode == 200,
-              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
-        else { return nil }
-        return Self.lyrics(from: json)
+        guard let data = await get(components.url) else { return .failed }
+        guard !data.isEmpty, let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let found = Self.lyrics(from: json)
+        else { return .missing }
+        return .found(found)
     }
 
     /// Without an exact match, the first one with synced lyrics and a similar duration.
-    private func search(_ state: PlayerState) async -> Lyrics? {
+    private func search(_ state: PlayerState) async -> Lookup {
         var components = URLComponents(string: "https://lrclib.net/api/search")!
         components.queryItems = [
             URLQueryItem(name: "track_name", value: state.title),
             URLQueryItem(name: "artist_name", value: state.artist),
         ]
-        guard let url = components.url,
-              let (data, response) = try? await session.data(from: url),
-              (response as? HTTPURLResponse)?.statusCode == 200,
-              let list = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]]
-        else { return nil }
-        let close = list.filter { item in
-            guard state.duration > 0, let d = item["duration"] as? Double else { return true }
-            return abs(d - state.duration) < 4
-        }
-        let best = close.first { ($0["syncedLyrics"] as? String)?.isEmpty == false } ?? close.first
-        return best.flatMap(Self.lyrics(from:))
+        guard let data = await get(components.url) else { return .failed }
+        guard let list = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]],
+              let found = Self.best(in: list, duration: state.duration)
+        else { return .missing }
+        return .found(found)
     }
 
-    private static func lyrics(from json: [String: Any]) -> Lyrics? {
+    /// The body of a 200, empty `Data` for a 404 (LRCLIB's "not found"), `nil` for anything
+    /// else: no network, a timeout, a server error.
+    private func get(_ url: URL?) async -> Data? {
+        guard let url else { return nil }
+        do {
+            let (data, response) = try await session.data(from: url)
+            switch (response as? HTTPURLResponse)?.statusCode {
+            case 200: return data
+            case 404: return Data()
+            case let status:
+                Log.network.error("LRCLIB answered \(status ?? 0, privacy: .public)")
+                return nil
+            }
+        } catch {
+            Log.network.error("LRCLIB unreachable: \(error.localizedDescription, privacy: .public)")
+            return nil
+        }
+    }
+
+    /// From a search's results: the first with synced lyrics among those whose duration is
+    /// within 4 s of the song's, or else the first of those.
+    static func best(in list: [[String: Any]], duration: Double) -> Lyrics? {
+        let close = list.filter { item in
+            guard duration > 0, let d = item["duration"] as? Double else { return true }
+            return abs(d - duration) < 4
+        }
+        let best = close.first { ($0["syncedLyrics"] as? String)?.isEmpty == false } ?? close.first
+        return best.flatMap(lyrics(from:))
+    }
+
+    static func lyrics(from json: [String: Any]) -> Lyrics? {
         let synced = json["syncedLyrics"] as? String ?? ""
         let plain = json["plainLyrics"] as? String ?? ""
         let instrumental = json["instrumental"] as? Bool ?? false

@@ -1,4 +1,5 @@
 import AppKit
+import os
 import Combine
 
 /// The heart of Musicfy: reads the apps, decides which one to show and sends commands.
@@ -57,6 +58,8 @@ final class PlayerController: ObservableObject {
     ]
     private var lastStates: [SourceKind: PlayerState] = [:]
     private var startedAt: [SourceKind: Date] = [:]
+    /// The last error number each app's read gave, so a hung app is logged once, not every read.
+    private var lastFailure: [SourceKind: Int] = [:]
     private var timer: Timer?
     /// The player window is on screen. Hidden, there's nothing to keep up to date as often.
     var panelVisible = true {
@@ -188,6 +191,9 @@ final class PlayerController: ObservableObject {
             switch result {
             case .success(var fresh):
                 if newProblem?.source == kind { newProblem = nil }
+                if lastFailure.removeValue(forKey: kind) != nil {
+                    Log.scripts.info("\(kind.displayName, privacy: .public) answers again")
+                }
                 if let promise = promisedPlaying, promise.source == kind, let read = fresh?.isPlaying {
                     if read == promise.playing || Date() > promise.until {
                         promisedPlaying = nil // confirmed, or the app really didn't follow
@@ -199,6 +205,10 @@ final class PlayerController: ObservableObject {
                 if let fresh, fresh.isPlaying, !wasPlaying { startedAt[kind] = Date() }
                 lastStates[kind] = fresh
             case .failure(let failure):
+                if lastFailure[kind] != failure.number {
+                    lastFailure[kind] = failure.number
+                    Log.scripts.error("Reading \(kind.displayName, privacy: .public) failed (\(failure.number, privacy: .public)): \(failure.message, privacy: .public)")
+                }
                 if failure.isNotAuthorized {
                     newProblem = Problem(source: kind, kind: .notAuthorized)
                 }
