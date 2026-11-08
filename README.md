@@ -9,16 +9,18 @@ on "Show Over Full-Screen Video"). It shows whatever is playing in either app.
 
 | Mode | Size | What it is |
 |---|---|---|
-| **Artwork** | 200 to 640, square | Just the artwork. On hover, the controls appear over glass made from the artwork. |
+| **Artwork** | 100 to 640, square | Just the artwork. On hover, the controls appear over glass made from the artwork. |
 | **Compact** | 320 × 136 | Thumbnail, title, time and controls. The background takes the artwork's color. |
 | **Island** | 300 × 44 | A pill at the top center of the screen, tinted like compact. It opens downward on hover. |
 
-- Artwork scales smoothly with its size and shows more as it grows: under 300 only
+- Artwork scales smoothly with its size and shows more as it grows: under 200 it's a
+  mini artwork that shows only play/pause on hover (previous and next move to the menu,
+  and it stays as it is when the music stops); under 300 only
   Lyrics and Up Next up top and previous, play and next below (shuffle, repeat and
   volume move to the menu); from 300 Audio Output, Volume, shuffle and repeat join;
   from 380 the Compact button too.
-- **Resize** artwork from any corner or side. Push its top or bottom edge in to turn it
-  into compact; pull any edge or corner of compact out to turn it back into artwork. The
+- **Resize** artwork from any corner or side. From 200 up, push its top or bottom edge in
+  to turn it into compact; pull any edge or corner of compact out to turn it back into artwork. The
   edge you don't pull stays where it was, with lyrics or Up Next open below too.
 - **Drag** artwork or compact to the top center of the screen and let go: it becomes the
   Island. **Pull the Island down** and it becomes the artwork again.

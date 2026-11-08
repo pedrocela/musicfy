@@ -6,9 +6,12 @@ enum Theme {
     // MARK: Sizes (points)
     static let artworkSize = CGSize(width: 320, height: 320)
     /// Artwork mode resizes from its corners and sides; always square.
-    static let artworkSideRange: ClosedRange<CGFloat> = 200...640
+    static let artworkSideRange: ClosedRange<CGFloat> = 100...640
+    /// From this side up, pushing the top or bottom edge in turns artwork into compact,
+    /// and stretching compact never gives a smaller artwork. Below it is the mini artwork.
+    static let artworkMiniBreak: CGFloat = 200
     /// Artwork mode adds controls at these sides and drops them 8 pt below (`ArtworkDensity`).
-    static let artworkTierBreaks: [CGFloat] = [300, 380]
+    static let artworkTierBreaks: [CGFloat] = [200, 300, 380]
     static let artworkTierHysteresis: CGFloat = 8
     /// The sides where the small, normal and large measures apply (`ArtworkMetrics`).
     static let artworkReferenceSides: (CGFloat, CGFloat, CGFloat) = (260, 320, 420)
@@ -104,7 +107,9 @@ enum Theme {
 
 /// Which controls artwork mode shows, by size. What's hidden stays in the "…" menu.
 enum ArtworkDensity: Int, Comparable {
-    /// Under 300: Lyrics and Up Next up top; previous, play and next below.
+    /// Under 200: just the artwork; on hover, only play/pause.
+    case mini
+    /// 200 to 299: Lyrics and Up Next up top; previous, play and next below.
     case small
     /// 300 to 379: plus Audio Output and Volume up top, shuffle and repeat below.
     case normal
@@ -113,19 +118,19 @@ enum ArtworkDensity: Int, Comparable {
 
     static func < (a: Self, b: Self) -> Bool { a.rawValue < b.rawValue }
 
-    /// The tier for a side, given the current one: it steps up at 300 and 380, and back
-    /// down only under 292 and 372, so it doesn't flicker at a boundary.
+    /// The tier for a side, given the current one: it steps up at 200, 300 and 380, and
+    /// back down only under 192, 292 and 372, so it doesn't flicker at a boundary.
     func next(for side: CGFloat) -> ArtworkDensity {
         let up = Theme.artworkTierBreaks
         let down = up.map { $0 - Theme.artworkTierHysteresis }
         var tier = self
         while tier < .large, side >= up[tier.rawValue] { tier = ArtworkDensity(rawValue: tier.rawValue + 1)! }
-        while tier > .small, side < down[tier.rawValue - 1] { tier = ArtworkDensity(rawValue: tier.rawValue - 1)! }
+        while tier > .mini, side < down[tier.rawValue - 1] { tier = ArtworkDensity(rawValue: tier.rawValue - 1)! }
         return tier
     }
 
     init(side: CGFloat) {
-        self = ArtworkDensity.small.next(for: side)
+        self = ArtworkDensity.mini.next(for: side)
     }
 }
 

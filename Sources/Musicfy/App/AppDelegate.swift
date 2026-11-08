@@ -218,7 +218,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         case .stay:
             return
         case .compact:
-            guard settings.mode == .artwork, !idleCompact, !userOverrodeIdle, panelModel.drawer == .none else { return }
+            // The mini artwork is already as small as it gets: it stays.
+            guard settings.mode == .artwork, !idleCompact, !userOverrodeIdle, panelModel.drawer == .none,
+                  panelModel.artworkSide >= Theme.artworkMiniBreak else { return }
             delay = 1.5
         case .hide:
             guard isPanelVisible else { return }
@@ -553,6 +555,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         return panelModel.mode == .island ? [] : .all
     }
 
+    /// How small and large artwork can be: with lyrics or Up Next open below, no smaller
+    /// than the mini break, so the panel stays readable.
+    private var artworkRange: ClosedRange<CGFloat> {
+        let range = Theme.artworkSideRange
+        return panelModel.drawer == .none ? range : Theme.artworkMiniBreak...range.upperBound
+    }
+
     private func beginResize() {
         resizeStartFrame = panel.frame
         resizeStartSide = panelModel.artworkSide
@@ -583,14 +592,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     /// Returns `false` when the gesture ends in another mode.
     private func resize(edges: ResizeEdges, dx: CGFloat, dy: CGFloat) -> Bool {
         resizeLog.notice("step mode=\(self.panelModel.mode.rawValue, privacy: .public) edges=\(edges.rawValue, privacy: .public) dx=\(Int(dx), privacy: .public) dy=\(Int(dy), privacy: .public) mouse=\(NSStringFromPoint(NSEvent.mouseLocation), privacy: .public) window=\(NSStringFromRect(self.panel.frame), privacy: .public) live=\(NSStringFromRect(self.liveFrame), privacy: .public)")
-        let range = Theme.artworkSideRange
+        let range = artworkRange
         resizeActiveEdges = edges
         switch panelModel.mode {
         case .artwork:
             let extra = panelModel.drawer == .none ? 0 : Theme.drawerHeight
             // Only the top or bottom edge, pushed inward, squashes it into compact: it follows
             // the mouse 1:1 while compact fades in over it. A panel open below stays below.
-            if edges == .top || edges == .bottom {
+            // Under the mini break there's nothing to squash: the edges just resize it.
+            if edges == .top || edges == .bottom, resizeStartSide >= Theme.artworkMiniBreak {
                 let squash = edges == .bottom ? dy : -dy
                 if squash > 0 {
                     let compact = Theme.compactSize
@@ -654,7 +664,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             if edges.contains(.top) { growth = max(growth, dy) }
             if edges.contains(.right) { growth = max(growth, dx) }
             if edges.contains(.left) { growth = max(growth, -dx) }
-            let side = panelModel.artworkSide
+            // It stretches into the artwork it was, but never into a mini one.
+            let side = max(panelModel.artworkSide, Theme.artworkMiniBreak)
             let base = Theme.compactSize
             let extra = panelModel.drawer == .none ? 0 : Theme.drawerHeight
             let progress = min(1, max(0, growth / max(1, side - base.height)))
@@ -755,7 +766,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             if panelModel.grow >= 0.35 {
                 // Past a third of the way: finish the trip into artwork, growing away from
                 // the edge that stayed put.
-                let side = panelModel.artworkSide
+                let side = max(panelModel.artworkSide, Theme.artworkMiniBreak)
+                if side != panelModel.artworkSide { panelModel.artworkSide = side }
                 commitAnchor(for: resizedFrame(size: NSSize(width: side, height: side + extra)))
                 withAnimation(Theme.smooth) { panelModel.grow = 1 }
                 userSwitch(to: .artwork)
@@ -780,7 +792,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                 }
                 return
             }
-            let range = Theme.artworkSideRange
+            let range = artworkRange
             let clamped = min(max(panelModel.artworkSide, range.lowerBound), range.upperBound)
             if resizeCanvas != nil {
                 guard clamped != panelModel.artworkSide else {
