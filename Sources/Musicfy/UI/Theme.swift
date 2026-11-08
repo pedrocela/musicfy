@@ -23,6 +23,10 @@ enum Theme {
     static let islandShadowMargin: CGFloat = 24
     /// Gap between the menu bar and the Island.
     static let islandTopGap: CGFloat = 8
+    /// Dragging the player to the top: it's armed to become the Island when its center is
+    /// within this distance of the screen's center and its top this close to the top edge.
+    static let islandSnapWidth: CGFloat = 180
+    static let islandSnapDepth: CGFloat = 80
     /// How far the Island has to be pulled down to become the artwork.
     static let islandPullThreshold: CGFloat = 64
     /// The player never goes closer than this to the screen's edges.

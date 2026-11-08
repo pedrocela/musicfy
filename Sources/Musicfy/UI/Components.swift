@@ -81,8 +81,7 @@ struct WindowDragArea: NSViewRepresentable {
                     width: window.frame.width,
                     height: window.frame.height
                 )
-                window.setFrameOrigin(app.keptOnScreen(proposed, near: mouse).origin)
-                app.windowDragMoved(mouse: mouse)
+                window.setFrameOrigin(app.windowDragged(to: proposed, mouse: mouse))
             }
             app.windowDragEnded()
         }
