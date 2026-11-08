@@ -40,6 +40,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var autoHidden = false
     /// Out of the way of a full-screen video or app; back when it leaves full screen.
     private var hiddenForFullScreen = false
+    /// The full-screen app the player stepped aside for: it stays away from that one until
+    /// its full screen ends, even if the video pauses.
+    private var hiddenForApp: pid_t?
+    /// While some app is in full screen, looks every 2 s: a video can start playing in it
+    /// without any app or Space changing.
+    private var fullScreenPoll: Timer?
     private var menuOpen = false
     private var applyingFrame = false
     /// The user picked a mode while paused: don't auto-shrink again until something plays.
@@ -55,6 +61,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var resizeStartFrame = NSRect.zero
     private var resizeStartSide: CGFloat = 0
     private var resizeSwitchedMode = false
+    /// The edges the current resize pulls (empty until the mouse moves).
+    private var resizeActiveEdges: ResizeEdges = []
     /// The still window during a live artwork resize, and the player's rect on screen inside it.
     private var resizeCanvas: NSRect?
     private var canvasEdges: ResizeEdges = []
@@ -561,34 +569,50 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     // MARK: - Resizing from the edges
 
-    /// Artwork: every edge. Compact: every edge too, to stretch it into the artwork.
-    /// With lyrics or Up Next open below, the bottom edge belongs to that panel. Island: none.
+    /// Artwork and compact: every edge, also with lyrics or Up Next open below (the panel
+    /// travels with the bottom edge). Island: none.
     private var resizableEdges: ResizeEdges {
         guard !transitioning else { return [] }
-        let open = panelModel.drawer != .none
-        switch panelModel.mode {
-        case .artwork: return open ? [.left, .right, .top] : .all
-        case .compact: return open ? [.left, .right, .top] : .all
-        case .island: return []
-        }
+        return panelModel.mode == .island ? [] : .all
     }
 
     private func beginResize() {
         resizeStartFrame = panel.frame
         resizeStartSide = panelModel.artworkSide
         resizeSwitchedMode = false
+        resizeActiveEdges = []
+    }
+
+    /// A frame of `size` that keeps the edges opposite the pulled ones where they were
+    /// when the gesture began.
+    private func resizedFrame(size: NSSize) -> NSRect {
+        let start = resizeStartFrame
+        return NSRect(
+            x: resizeActiveEdges.contains(.left) ? start.maxX - size.width : start.minX,
+            y: resizeActiveEdges.contains(.top) ? start.minY : start.maxY - size.height,
+            width: size.width,
+            height: size.height
+        )
+    }
+
+    /// Saves where the player ends up after a resize, so the next layout starts there.
+    /// Pulling the top edge moves the top-left corner without moving the window's origin,
+    /// and AppKit only reports moves of the origin.
+    private func commitAnchor(for frame: NSRect) {
+        let kept = keptOnScreen(frame)
+        anchor = NSPoint(x: kept.minX, y: kept.maxY)
     }
 
     /// Returns `false` when the gesture ends in another mode.
     private func resize(edges: ResizeEdges, dx: CGFloat, dy: CGFloat) -> Bool {
         resizeLog.notice("step mode=\(self.panelModel.mode.rawValue, privacy: .public) edges=\(edges.rawValue, privacy: .public) dx=\(Int(dx), privacy: .public) dy=\(Int(dy), privacy: .public) mouse=\(NSStringFromPoint(NSEvent.mouseLocation), privacy: .public) window=\(NSStringFromRect(self.panel.frame), privacy: .public) live=\(NSStringFromRect(self.liveFrame), privacy: .public)")
         let range = Theme.artworkSideRange
+        resizeActiveEdges = edges
         switch panelModel.mode {
         case .artwork:
             let extra = panelModel.drawer == .none ? 0 : Theme.drawerHeight
             // Only the top or bottom edge, pushed inward, squashes it into compact: it follows
-            // the mouse 1:1 while compact fades in over it.
-            // With a panel open below, only the top edge does it, and the panel stays.
+            // the mouse 1:1 while compact fades in over it. A panel open below stays below.
             if edges == .top || edges == .bottom {
                 let squash = edges == .bottom ? dy : -dy
                 if squash > 0 {
@@ -717,6 +741,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         guard resizeCanvas != nil else { return }
         let frame = liveFrame
         resizeCanvas = nil
+        liveFrame = .zero
         var transaction = Transaction()
         transaction.disablesAnimations = true
         withTransaction(transaction) { panelModel.liveRect = nil }
@@ -747,10 +772,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         resizeLog.notice("end window=\(NSStringFromRect(self.panel.frame), privacy: .public) mode=\(self.panelModel.mode.rawValue, privacy: .public) grow=\(Double(self.panelModel.grow), privacy: .public) squash=\(Double(self.panelModel.squash), privacy: .public) switched=\(self.resizeSwitchedMode, privacy: .public)")
         guard !resizeSwitchedMode else { return }
         let startAnchor = NSPoint(x: resizeStartFrame.minX, y: resizeStartFrame.maxY)
+        let extra = panelModel.drawer == .none ? 0 : Theme.drawerHeight
         switch panelModel.mode {
         case .compact:
             if panelModel.grow >= 0.35 {
-                // Past a third of the way: finish the trip into artwork.
+                // Past a third of the way: finish the trip into artwork, growing away from
+                // the edge that stayed put.
+                let side = panelModel.artworkSide
+                commitAnchor(for: resizedFrame(size: NSSize(width: side, height: side + extra)))
                 withAnimation(Theme.smooth) { panelModel.grow = 1 }
                 userSwitch(to: .artwork)
                 resetStretch(after: Theme.resizeDuration)
@@ -762,6 +791,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         case .artwork:
             if panelModel.squash > 0 {
                 if panelModel.squash >= 0.35 {
+                    let compact = Theme.compactSize
+                    commitAnchor(for: resizedFrame(size: NSSize(width: compact.width, height: compact.height + extra)))
                     withAnimation(Theme.smooth) { panelModel.squash = 1 }
                     userSwitch(to: .compact)
                     resetStretch(after: Theme.resizeDuration)
@@ -781,7 +812,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                 }
                 // Past the minimum or maximum: the rubber springs back inside the canvas,
                 // toward the fixed corner, then the window shrinks to fit.
-                let extra = panelModel.drawer == .none ? 0 : Theme.drawerHeight
                 let target = NSRect(
                     x: canvasEdges.contains(.left) ? liveFrame.maxX - clamped : liveFrame.minX,
                     y: canvasEdges.contains(.top) ? liveFrame.minY : liveFrame.maxY - clamped - extra,
@@ -795,6 +825,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                 return
             }
             if clamped != panelModel.artworkSide { panelModel.artworkSide = clamped }
+            if !resizeActiveEdges.isEmpty {
+                commitAnchor(for: resizedFrame(size: NSSize(width: clamped, height: clamped + extra)))
+            }
             let target = framedRect(for: .artwork)
             if target != panel.frame {
                 animateFrame(to: target) // the rubber springs back
@@ -1090,8 +1123,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     func showPanel() {
         autoHidden = false
         guard !panel.isVisible else { return }
-        if !settings.showOverFullScreen, FullScreen.covers(framedOrIslandRect) {
-            hiddenForFullScreen = true // shows when full screen ends
+        let verdict = fullScreenVerdict()
+        pollFullScreen(verdict.app != nil)
+        if verdict.stepAside {
+            hiddenForFullScreen = true // shows when the video's full screen ends
+            hiddenForApp = verdict.app?.processIdentifier
             return
         }
         placePanel(for: panelModel.mode)
@@ -1128,12 +1164,39 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         panelModel.mode == .island ? islandWindowRect() : framedRect(for: panelModel.mode)
     }
 
-    /// Full screen came or went (a Space changed, another app came forward): step aside
-    /// for a full-screen window on the player's display, and come back after.
+    /// The full-screen app on the player's display, and whether the player steps aside
+    /// for it: only for video, never for an app like Claude or an editor.
+    private func fullScreenVerdict() -> (app: NSRunningApplication?, stepAside: Bool) {
+        guard !settings.showOverFullScreen,
+              let app = FullScreen.app(covering: framedOrIslandRect)
+        else { return (nil, false) }
+        let already = hiddenForFullScreen && hiddenForApp == app.processIdentifier
+        return (app, already || FullScreen.isPlayingVideo(app))
+    }
+
+    private func pollFullScreen(_ on: Bool) {
+        if on, fullScreenPoll == nil {
+            let timer = Timer(timeInterval: 2, repeats: true) { [weak self] _ in
+                Task { @MainActor in self?.checkFullScreen() }
+            }
+            timer.tolerance = 0.5
+            RunLoop.main.add(timer, forMode: .common)
+            fullScreenPoll = timer
+        } else if !on, let timer = fullScreenPoll {
+            timer.invalidate()
+            fullScreenPoll = nil
+        }
+    }
+
+    /// Full screen came or went (a Space changed, another app came forward, a video
+    /// started): step aside for a full-screen video on the player's display, and come back after.
     private func checkFullScreen() {
-        let covered = !settings.showOverFullScreen && FullScreen.covers(framedOrIslandRect)
-        if covered, panel.isVisible {
+        let verdict = fullScreenVerdict()
+        // A player hidden by hand needs no watching until it's shown again.
+        pollFullScreen(verdict.app != nil && (panel.isVisible || hiddenForFullScreen))
+        if verdict.stepAside, panel.isVisible {
             hiddenForFullScreen = true
+            hiddenForApp = verdict.app?.processIdentifier
             panelModel.isHovering = false
             panelModel.islandExpanded = false
             panelModel.volumeOpen = false
@@ -1142,8 +1205,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                 self.panel.orderOut(nil)
                 self.player.panelVisible = false
             }
-        } else if !covered, hiddenForFullScreen {
+        } else if !verdict.stepAside, hiddenForFullScreen {
             hiddenForFullScreen = false
+            hiddenForApp = nil
             showPanel()
         }
     }

@@ -1,8 +1,9 @@
 # Musicfy
 
 A floating player for **Music and Spotify** on macOS. Always in view: above every
-window and on every Space. It steps aside while a video or app is in full screen on its
-display, and comes back after (unless you turn on "Show Over Full Screen"). It shows whatever is playing in either app.
+window and on every Space, also over full-screen apps. It steps aside while a video plays
+in full screen on its display, and comes back when that full screen ends (unless you turn
+on "Show Over Full Screen"). It shows whatever is playing in either app.
 
 ## Modes
 
@@ -17,7 +18,8 @@ display, and comes back after (unless you turn on "Show Over Full Screen"). It s
   volume move to the menu); from 300 Audio Output, Volume, shuffle and repeat join;
   from 380 the Compact button too.
 - **Resize** artwork from any corner or side. Push its top or bottom edge in to turn it
-  into compact; pull any edge or corner of compact out to turn it back into artwork.
+  into compact; pull any edge or corner of compact out to turn it back into artwork. The
+  edge you don't pull stays where it was, with lyrics or Up Next open below too.
 - **Drag** artwork or compact to the top center of the screen and let go: it becomes the
   Island. **Pull the Island down** and it becomes the artwork again.
 - **Double click** an empty area: switch between artwork and compact.
