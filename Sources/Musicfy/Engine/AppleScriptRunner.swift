@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 /// Runs AppleScript on its own serial queue, off the main thread: a hung Music or the
 /// permission dialog can't freeze the player.
@@ -6,7 +7,12 @@ import Foundation
 /// Commands (play, volume, skip) jump the line: every script waiting to run first sends
 /// the pending commands, so a button never waits behind a state read, the artwork or the
 /// queue. At worst it waits for the one script already running.
+///
+/// Every script runs inside `with timeout`: a hung Music would otherwise hold the queue
+/// (and every button) for AppleScript's default two minutes.
 final class AppleScriptRunner {
+    /// Seconds an app gets to answer one Apple Event before the script gives up.
+    static let timeout = 4
     static let shared = AppleScriptRunner()
 
     let queue = DispatchQueue(label: "musicfy.applescript", qos: .userInitiated)
@@ -24,6 +30,13 @@ final class AppleScriptRunner {
 
         /// errAEEventNotPermitted: the user hasn't granted (or denied) the Automation permission.
         var isNotAuthorized: Bool { number == -1743 }
+        /// errAETimeout: the app didn't answer within `AppleScriptRunner.timeout`.
+        var isTimeout: Bool { number == -1712 }
+    }
+
+    /// Wraps a script so no Apple Event in it waits longer than `seconds`.
+    static func withTimeout(_ source: String, seconds: Int = timeout) -> String {
+        "with timeout of \(seconds) seconds\n\(source)\nend timeout"
     }
 
     /// Compiles without running. Tells whether a script variant is valid in the installed
@@ -31,7 +44,7 @@ final class AppleScriptRunner {
     func compiles(_ source: String) -> Bool {
         dispatchPrecondition(condition: .onQueue(queue))
         if compiled[source] != nil { return true }
-        guard let script = NSAppleScript(source: source) else { return false }
+        guard let script = NSAppleScript(source: Self.withTimeout(source)) else { return false }
         var error: NSDictionary?
         guard script.compileAndReturnError(&error) else { return false }
         compiled[source] = script
@@ -63,7 +76,9 @@ final class AppleScriptRunner {
             let next = pending.isEmpty ? nil : pending.removeFirst()
             lock.unlock()
             guard let next else { return }
-            _ = execute(next.source, cache: next.cache)
+            if case .failure(let failure) = execute(next.source, cache: next.cache) {
+                Log.scripts.error("Command failed (\(failure.number, privacy: .public)): \(failure.message, privacy: .public)")
+            }
             if let completion = next.completion { DispatchQueue.main.async(execute: completion) }
         }
     }
@@ -73,12 +88,14 @@ final class AppleScriptRunner {
         if cache, let hit = compiled[source] {
             script = hit
         } else {
-            guard let fresh = NSAppleScript(source: source) else {
+            guard let fresh = NSAppleScript(source: Self.withTimeout(source)) else {
                 return .failure(Failure(number: 0, message: "Couldn't create the script"))
             }
             var error: NSDictionary?
             guard fresh.compileAndReturnError(&error) else {
-                return .failure(Self.failure(from: error))
+                let failure = Self.failure(from: error)
+                Log.scripts.fault("Script doesn't compile (\(failure.number, privacy: .public)): \(failure.message, privacy: .public)")
+                return .failure(failure)
             }
             if cache { compiled[source] = fresh }
             script = fresh

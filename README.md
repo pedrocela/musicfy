@@ -54,7 +54,8 @@ To start it automatically: menu → "Open at Login".
 
 - It reads and controls the apps with **AppleScript** (the only thing Music and Spotify
   allow from outside). It never launches them: every script first checks that the app
-  is running. Commands jump ahead of state reads, so buttons respond right away.
+  is running. Commands jump ahead of state reads, so buttons respond right away, and no
+  app gets more than 4 s to answer: a hung Music can't freeze the buttons.
 - **Podcasts** has no AppleScript, so it's read from the system's Now Playing
   (MediaRemote), the same thing Control Center shows. Since macOS 15.4 MediaRemote only
   answers Apple's own binaries, so a tiny library (`Helper/NowPlaying.m`) runs inside
@@ -80,4 +81,13 @@ Sources/Musicfy/
   App/      floating window, menu bar, menus, modes, resizing and mouse
   Engine/   Music, Spotify and Podcasts, state, artwork, glass, colors, lyrics, audio output
   UI/       SwiftUI views; Theme.swift holds sizes, colors and motion
+Tests/      unit tests for the engine (lyrics, parsing, timing)
 ```
+
+- **Tests**: `swift test` (needs Xcode; the command line tools alone don't ship XCTest).
+  GitHub runs them on every push, before building.
+- **Logs**: errors (an app that stops answering, the Podcasts reader failing, lyrics that
+  couldn't be fetched) go to the system log. Watch them with
+  `log stream --predicate 'subsystem == "com.pedrocela.musicfy"' --level info`, or in Console.
+- **Version**: the menu's last line says which build is installed: the version, the build
+  number (commit count) and the commit, with `-dirty` if it had uncommitted changes.

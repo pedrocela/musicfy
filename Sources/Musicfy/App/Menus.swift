@@ -1,4 +1,5 @@
 import AppKit
+import os
 import ServiceManagement
 import SwiftUI
 
@@ -162,12 +163,16 @@ enum Menus {
                     try login.register()
                 }
             } catch {
-                NSLog("Musicfy: couldn't change Open at Login: \(error)")
+                Log.app.error("Couldn't change Open at Login: \(error.localizedDescription, privacy: .public)")
             }
         }
         let hide = menu.add(app.isPanelVisible ? "Hide Musicfy" : "Show Musicfy", key: "m") { app.togglePanel() }
         hide.keyEquivalentModifierMask = [.command, .option]
         menu.addItem(.separator())
+        let about = NSMenuItem(title: BuildInfo.label, action: nil, keyEquivalent: "")
+        about.isEnabled = false
+        if !menu.showsStateColumn { about.image = MenuIcon.blank }
+        menu.addItem(about)
         menu.add("Quit Musicfy", key: "q") { NSApp.terminate(nil) }
         return menu
     }

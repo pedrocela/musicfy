@@ -1,4 +1,5 @@
 import AppKit
+import os
 
 /// Apple Podcasts has no AppleScript. It does report to the system's Now Playing
 /// (MediaRemote), like the media keys and Control Center see it, and that's how it's read
@@ -164,7 +165,10 @@ final class NowPlayingBridge {
             if self.process === ended {
                 self.process = nil
                 self.input = nil
-                if ended.terminationStatus != 0 || ended.terminationReason == .uncaughtSignal { self.failures += 1 }
+                if ended.terminationStatus != 0 || ended.terminationReason == .uncaughtSignal {
+                    self.failures += 1
+                    Log.podcasts.error("Now Playing reader ended with status \(ended.terminationStatus, privacy: .public) (failure \(self.failures, privacy: .public))")
+                }
             }
             self.lock.unlock()
         }
@@ -175,6 +179,7 @@ final class NowPlayingBridge {
             buffer.removeAll()
         } catch {
             failures += 1
+            Log.podcasts.error("Couldn't start the Now Playing reader: \(error.localizedDescription, privacy: .public)")
         }
     }
 
@@ -213,7 +218,10 @@ final class NowPlayingBridge {
         var changed = false
         for line in lines {
             guard let json = try? JSONSerialization.jsonObject(with: line) as? [String: Any] else { continue }
-            if json["error"] != nil { continue }
+            if let message = json["error"] as? String {
+                Log.podcasts.error("Now Playing reader: \(message, privacy: .public)")
+                continue
+            }
             apply(json)
             changed = true
         }
