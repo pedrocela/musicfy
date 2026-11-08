@@ -71,7 +71,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var hideHotKey: HotKey?
     private var grip: ResizeGripView!
 
-    var isPanelVisible: Bool { panel?.isVisible ?? false }
+    var isPanelVisible: Bool { panel?.isShown ?? false }
     private var transitioning: Bool { panelModel.morph != nil }
 
     // MARK: - Launch
@@ -307,7 +307,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             player.lyricsVisible = false
         }
 
-        if !animated || !panel.isVisible {
+        if !animated || !panel.isShown {
             transitionGeneration += 1
             morphTarget = nil
             panelModel.morph = nil
@@ -331,7 +331,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         duration: TimeInterval = Theme.resizeDuration,
         completion: (() -> Void)? = nil
     ) {
-        guard panel.isVisible else {
+        guard panel.isShown else {
             applyingFrame = true
             panel.setFrame(frame, display: true)
             applyingFrame = false
@@ -1062,7 +1062,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             mouseStillSince = Date()
         }
         pollMouse()
-        guard let panel, panel.isVisible else {
+        guard let panel, panel.isShown else {
             // Hidden: nothing to follow until it shows again (showPanel wakes it).
             setMouseWatch(.off)
             return
@@ -1126,7 +1126,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     private func pollMouse() {
-        guard let panel, panel.isVisible, !menuOpen else { return }
+        guard let panel, panel.isShown, !menuOpen else { return }
         let mouse = NSEvent.mouseLocation
         trackWindowDrag(mouse: mouse)
         guard !transitioning else { return }
@@ -1185,7 +1185,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     func showPanel() {
         autoHidden = false
-        guard !panel.isVisible else { return }
+        guard !panel.isShown else { return }
         let verdict = fullScreenVerdict()
         pollFullScreen(verdict.app != nil)
         if verdict.stepAside {
@@ -1207,7 +1207,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             autoHidden = false
             hiddenForFullScreen = false
         }
-        guard panel.isVisible else { return }
+        guard panel.isShown else { return }
         panelModel.isHovering = false
         panelModel.islandExpanded = false
         panelModel.volumeOpen = false
@@ -1256,8 +1256,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private func checkFullScreen() {
         let verdict = fullScreenVerdict()
         // A player hidden by hand needs no watching until it's shown again.
-        pollFullScreen(verdict.app != nil && (panel.isVisible || hiddenForFullScreen))
-        if verdict.stepAside, panel.isVisible {
+        pollFullScreen(verdict.app != nil && (panel.isShown || hiddenForFullScreen))
+        if verdict.stepAside, panel.isShown {
             hiddenForFullScreen = true
             hiddenForApp = verdict.app?.processIdentifier
             panelModel.isHovering = false
@@ -1275,6 +1275,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
     }
 
+    /// A player that macOS left on one desktop can't be put back on every Space; swap in a
+    /// new window with the same contents, frame and state.
+    private func replacePanelIfPinned() {
+        guard let old = panel, old.isPinnedToOneSpace else { return }
+        let fresh = PlayerPanel()
+        fresh.delegate = self
+        fresh.onPlaybackKey = old.onPlaybackKey
+        let content = old.contentView
+        old.contentView = NSView()
+        fresh.contentView = content
+        fresh.setFrame(old.frame, display: false)
+        fresh.hasShadow = old.hasShadow
+        fresh.alphaValue = old.alphaValue
+        let shown = old.isShown
+        fresh.ignoresMouseEvents = shown ? old.ignoresMouseEvents : false
+        fresh.orderFrontRegardless()
+        if !shown { fresh.orderOut(nil) }
+        old.delegate = nil
+        old.close()
+        panel = fresh
+    }
+
     private func watchFullScreen() {
         let center = NSWorkspace.shared.notificationCenter
         for name in [
@@ -1284,6 +1306,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         ] {
             center.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
                 MainActor.assumeIsolated {
+                    self?.replacePanelIfPinned()
                     self?.checkFullScreen()
                     // Entering full screen animates; look again once it has settled.
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
