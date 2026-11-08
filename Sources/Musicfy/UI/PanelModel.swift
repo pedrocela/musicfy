@@ -36,6 +36,8 @@ final class PanelModel: ObservableObject {
     /// any size) and the player is drawn at this rect inside it, in window points from the
     /// top left. Resizing the window itself made its content trail a frame behind and wobble.
     @Published var liveRect: CGRect?
+    /// Which controls artwork mode shows right now (the "…" menu lists the hidden ones).
+    @Published var artworkDensity: ArtworkDensity = .normal
 
     var actions = PanelActions()
 

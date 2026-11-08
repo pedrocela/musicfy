@@ -10,15 +10,15 @@ struct SourceChip: View {
     let kind: SourceKind
     var style: Style = .glass
     @ObservedObject var player: PlayerController
-    @Environment(\.uiScale) private var scale
+    @Environment(\.artworkMetrics) private var metrics
     @State private var hovering = false
 
     var body: some View {
         Button { player.open(kind) } label: {
             Group {
                 if style == .glass {
-                    SourceGlyph(kind: kind, size: 16 * scale)
-                        .frame(width: 28 * scale, height: 28 * scale)
+                    SourceGlyph(kind: kind, size: metrics.glyph)
+                        .frame(width: metrics.glyphCircle, height: metrics.glyphCircle)
                         .background(
                             GlassBackdrop(player: player, shape: Circle())
                                 .overlay(Circle().fill(Color.white.opacity(hovering ? 0.08 : 0)))
@@ -97,6 +97,8 @@ struct TimeBar: View {
     var stacked = false
     /// Small artwork: the times stay hidden until the pointer is over the bar.
     var timesOnHover = false
+    /// Artwork mode passes its own size for the times.
+    var timeSize: CGFloat? = nil
     @State private var dragFraction: Double?
     @State private var hovering = false
     @Environment(\.uiScale) private var scale
@@ -139,7 +141,7 @@ struct TimeBar: View {
                     }
                 }
             }
-            .font(.system(size: 11 * scale, weight: .medium).monospacedDigit())
+            .font(.system(size: timeSize ?? 11 * scale, weight: .medium).monospacedDigit())
             .foregroundStyle(Theme.timeColor)
         }
     }
@@ -186,7 +188,16 @@ struct TransportRow: View {
     var size: Size = .large
     /// The open Island only shows previous, play and next, centered.
     var showsModes = true
+    /// Artwork mode's measures, which replace `size`.
+    var metrics: ArtworkMetrics? = nil
     @Environment(\.uiScale) private var scale
+
+    private var sideSize: CGFloat { metrics?.shuffle ?? size.side }
+    private var skipSize: CGFloat { metrics?.skip ?? size.skip }
+    private var playSize: CGFloat { metrics?.play ?? size.play }
+    private var rowHeight: CGFloat { metrics?.transportHeight ?? size.height * scale }
+    /// Shuffle and repeat when off.
+    private var modeOff: Color { Color.white.opacity(metrics == nil ? 0.5 : 0.6) }
 
     var body: some View {
         let state = player.state
@@ -195,8 +206,8 @@ struct TransportRow: View {
             if showsModes {
                 IconButton(
                     symbol: "shuffle",
-                    size: size.side,
-                    tint: state?.shuffle == true ? Theme.primary : Color.white.opacity(0.5),
+                    size: sideSize,
+                    tint: state?.shuffle == true ? Theme.primary : modeOff,
                     help: "Shuffle",
                     active: state?.shuffle == true,
                     action: { player.toggleShuffle() }
@@ -205,24 +216,24 @@ struct TransportRow: View {
             } else {
                 Spacer(minLength: 0)
             }
-            IconButton(symbol: "backward.fill", size: size.skip, help: "Previous", action: { player.previous() })
+            IconButton(symbol: "backward.fill", size: skipSize, help: "Previous", action: { player.previous() })
             if showsModes { Spacer(minLength: 0) } else { Spacer().frame(width: 18) }
-            IconButton(symbol: playing ? "pause.fill" : "play.fill", size: size.play, help: "Play/Pause", action: { player.playPause() })
+            IconButton(symbol: playing ? "pause.fill" : "play.fill", size: playSize, help: "Play/Pause", action: { player.playPause() })
             if showsModes { Spacer(minLength: 0) } else { Spacer().frame(width: 18) }
-            IconButton(symbol: "forward.fill", size: size.skip, help: "Next", action: { player.next() })
+            IconButton(symbol: "forward.fill", size: skipSize, help: "Next", action: { player.next() })
             Spacer(minLength: 0)
             if showsModes {
                 IconButton(
                     symbol: state?.repeatMode == .one ? "repeat.1" : "repeat",
-                    size: size.side,
-                    tint: state?.repeatMode == .off || state == nil ? Color.white.opacity(0.5) : Theme.primary,
+                    size: sideSize,
+                    tint: state?.repeatMode == .off || state == nil ? modeOff : Theme.primary,
                     help: "Repeat",
                     active: state.map { $0.repeatMode != .off } ?? false,
                     action: { player.cycleRepeat() }
                 )
             }
         }
-        .frame(height: size.height * scale)
+        .frame(height: rowHeight)
     }
 }
 
@@ -314,19 +325,19 @@ struct GlassCapsule: View {
     @ObservedObject var player: PlayerController
     @ObservedObject var settings: Settings
     @ObservedObject var panel: PanelModel
-    var density: ArtworkDensity = .full
-    @Environment(\.uiScale) private var scale
+    var density: ArtworkDensity = .normal
+    @Environment(\.artworkMetrics) private var m
     @State private var shown = false
 
     var body: some View {
         let shape = Capsule()
         ZStack {
             if panel.volumeOpen {
-                HStack(spacing: 6 * scale) {
+                HStack(spacing: 6 * m.ratio) {
                     Button { panel.volumeOpen = false } label: {
                         TopBarIcon(symbol: "speaker.wave.2", nudge: 1)
                             .foregroundStyle(Theme.primary)
-                            .frame(width: 28 * scale, height: 30 * scale)
+                            .frame(width: m.buttonWidth, height: m.capsuleHeight)
                             .contentShape(Rectangle())
                     }
                     .buttonStyle(PressableStyle())
@@ -336,8 +347,8 @@ struct GlassCapsule: View {
                         onCommit: { player.setVolume(Int(($0 * 100).rounded())) },
                         smoothFill: false
                     )
-                    .frame(width: (density == .minimal ? 88 : 112) * scale)
-                    .padding(.trailing, 10 * scale)
+                    .frame(width: (density == .small ? 88 : 112) * m.ratio)
+                    .padding(.trailing, 10 * m.ratio)
                 }
                 .transition(.opacity.combined(with: .scale(scale: 0.9, anchor: .trailing)))
             } else {
@@ -345,8 +356,8 @@ struct GlassCapsule: View {
                     .transition(.opacity.combined(with: .scale(scale: 0.9, anchor: .trailing)))
             }
         }
-        .padding(.horizontal, 3 * scale)
-        .frame(height: 30 * scale)
+        .padding(.horizontal, 3)
+        .frame(height: m.capsuleHeight)
         .background(
             ZStack {
                 shape.fill(.ultraThinMaterial)
@@ -358,31 +369,33 @@ struct GlassCapsule: View {
         .clipShape(shape)
         .shadow(color: .black.opacity(0.25), radius: 4, y: 2) // 0 2 8: blur 8 is radius 4
         .opacity(shown ? 1 : 0)
-        .offset(y: shown ? 0 : -2 * scale)
+        .offset(y: shown ? 0 : -2)
         .onAppear { withAnimation(.easeOut(duration: 0.22)) { shown = true } }
         .animation(Theme.smooth, value: panel.volumeOpen)
+        // Buttons come and go at the size breaks with a short fade.
+        .animation(.easeInOut(duration: 0.2), value: density)
     }
 
     private var buttons: some View {
         let reading = [
             settings.showLyricsButton ? Item.lyrics : nil,
-            settings.showQueueButton && density != .minimal ? Item.queue : nil,
+            settings.showQueueButton ? Item.queue : nil,
         ].compactMap { $0 }
-        let sound = [
-            settings.showOutput && density == .full ? Item.output : nil,
+        let sound = density >= .normal ? [
+            settings.showOutput ? Item.output : nil,
             settings.showVolume ? Item.volume : nil,
-        ].compactMap { $0 }
-        let mode = density == .full ? [Item.compact] : []
+        ].compactMap { $0 } : []
+        let mode = density == .large ? [Item.compact] : []
         let groups = [reading, sound, mode].filter { !$0.isEmpty }
         return HStack(spacing: 0) {
             ForEach(Array(groups.enumerated()), id: \.offset) { index, group in
                 if index > 0 {
                     Rectangle()
                         .fill(Color.white.opacity(0.16))
-                        .frame(width: 1, height: 14 * scale)
-                        .padding(.horizontal, 4 * scale)
+                        .frame(width: 1, height: 14 * m.ratio)
+                        .padding(.horizontal, 4)
                 }
-                HStack(spacing: 2 * scale) {
+                HStack(spacing: 2) {
                     ForEach(group, id: \.self) { item in button(item) }
                 }
             }
@@ -416,18 +429,19 @@ struct GlassCapsule: View {
     }
 }
 
-/// A 13 pt outline symbol centered in a 16 × 16 box. `nudge` is an optical shift to the right.
+/// An outline symbol (13 pt at the normal size) centered in a box 3 pt larger.
+/// `nudge` is an optical shift to the right.
 private struct TopBarIcon: View {
     let symbol: String
     var nudge: CGFloat = 0
-    @Environment(\.uiScale) private var scale
+    @Environment(\.artworkMetrics) private var m
 
     var body: some View {
         Image(systemName: symbol)
-            .font(.system(size: 13 * scale, weight: .medium))
+            .font(.system(size: m.buttonIcon, weight: .medium))
             .imageScale(.small)
-            .frame(width: 16 * scale, height: 16 * scale)
-            .offset(x: nudge * scale)
+            .frame(width: m.buttonIcon + 3, height: m.buttonIcon + 3)
+            .offset(x: nudge)
     }
 }
 
@@ -440,13 +454,13 @@ private struct TopBarButton: View {
     var active = false
     let action: () -> Void
     @State private var hovering = false
-    @Environment(\.uiScale) private var scale
+    @Environment(\.artworkMetrics) private var m
 
     var body: some View {
         Button(action: action) {
             EmptyView()
         }
-        .buttonStyle(Style(symbol: symbol, nudge: nudge, active: active, hovering: hovering, scale: scale))
+        .buttonStyle(Style(symbol: symbol, nudge: nudge, active: active, hovering: hovering, m: m))
         .help(help)
         .onHover { hovering = $0 }
         .animation(.easeOut(duration: 0.18), value: active)
@@ -458,17 +472,17 @@ private struct TopBarButton: View {
         let nudge: CGFloat
         let active: Bool
         let hovering: Bool
-        let scale: CGFloat
+        let m: ArtworkMetrics
 
         func makeBody(configuration: Configuration) -> some View {
             let pressed = configuration.isPressed
-            let pill = RoundedRectangle(cornerRadius: 12 * scale, style: .continuous)
+            let pill = RoundedRectangle(cornerRadius: m.buttonHeight / 2, style: .continuous)
             TopBarIcon(symbol: symbol, nudge: nudge)
                 .foregroundStyle(
                     active ? Color(red: 0.102, green: 0.078, blue: 0.071) // #1A1412
                         : Color.white.opacity(hovering || pressed ? 1 : 0.85)
                 )
-                .frame(width: 28 * scale, height: 24 * scale)
+                .frame(width: m.buttonWidth, height: m.buttonHeight)
                 .background(
                     pill.fill(
                         active ? Color.white
@@ -477,7 +491,7 @@ private struct TopBarButton: View {
                 )
                 .scaleEffect(pressed ? 0.92 : 1)
                 .animation(.easeOut(duration: 0.12), value: pressed)
-                .frame(width: 28 * scale, height: 30 * scale)
+                .frame(width: m.buttonWidth, height: m.capsuleHeight)
                 .contentShape(Rectangle())
         }
     }

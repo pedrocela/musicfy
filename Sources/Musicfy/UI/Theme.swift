@@ -7,9 +7,11 @@ enum Theme {
     static let artworkSize = CGSize(width: 320, height: 320)
     /// Artwork mode resizes from its corners and sides; always square.
     static let artworkSideRange: ClosedRange<CGFloat> = 200...640
-    /// Below these sides artwork mode shows fewer controls (see `ArtworkDensity`).
-    static let artworkReducedBelow: CGFloat = 300
-    static let artworkMinimalBelow: CGFloat = 250
+    /// Artwork mode adds controls at these sides and drops them 8 pt below (`ArtworkDensity`).
+    static let artworkTierBreaks: [CGFloat] = [300, 380]
+    static let artworkTierHysteresis: CGFloat = 8
+    /// The sides where the small, normal and large measures apply (`ArtworkMetrics`).
+    static let artworkReferenceSides: (CGFloat, CGFloat, CGFloat) = (260, 320, 420)
     static let compactSize = CGSize(width: 320, height: 136)
     static let islandCollapsed = CGSize(width: 300, height: 44)
     static let islandExpanded = CGSize(width: 380, height: 160)
@@ -98,32 +100,76 @@ enum Theme {
     static let hoverExitDelay: TimeInterval = 0.3
 }
 
-// MARK: - Artwork mode density
+// MARK: - Artwork mode sizes
 
-/// How much artwork mode shows on hover, by size. Everything dropped is still in the menu.
-enum ArtworkDensity: Comparable {
-    /// 250 and below: only lyrics and volume up top, times on hover.
-    case minimal
-    /// 250 to 300: no audio output or mode button, no favorite star.
-    case reduced
-    /// 300 and up: everything.
-    case full
+/// Which controls artwork mode shows, by size. What's hidden stays in the "…" menu.
+enum ArtworkDensity: Int, Comparable {
+    /// Under 300: Lyrics and Up Next up top; previous, play and next below.
+    case small
+    /// 300 to 379: plus Audio Output and Volume up top, shuffle and repeat below.
+    case normal
+    /// 380 and up: plus the Compact button.
+    case large
+
+    static func < (a: Self, b: Self) -> Bool { a.rawValue < b.rawValue }
+
+    /// The tier for a side, given the current one: it steps up at 300 and 380, and back
+    /// down only under 292 and 372, so it doesn't flicker at a boundary.
+    func next(for side: CGFloat) -> ArtworkDensity {
+        let up = Theme.artworkTierBreaks
+        let down = up.map { $0 - Theme.artworkTierHysteresis }
+        var tier = self
+        while tier < .large, side >= up[tier.rawValue] { tier = ArtworkDensity(rawValue: tier.rawValue + 1)! }
+        while tier > .small, side < down[tier.rawValue - 1] { tier = ArtworkDensity(rawValue: tier.rawValue - 1)! }
+        return tier
+    }
 
     init(side: CGFloat) {
-        if side < Theme.artworkMinimalBelow {
-            self = .minimal
-        } else if side < Theme.artworkReducedBelow {
-            self = .reduced
-        } else {
-            self = .full
-        }
+        self = ArtworkDensity.small.next(for: side)
     }
+}
+
+/// Sizes in artwork mode, interpolated in a straight line with the side between three
+/// reference points (260, 320, 420), so nothing jumps while resizing.
+struct ArtworkMetrics: Equatable {
+    let side: CGFloat
+
+    private func value(_ small: CGFloat, _ normal: CGFloat, _ large: CGFloat) -> CGFloat {
+        let (a, b, c) = (Theme.artworkReferenceSides.0, Theme.artworkReferenceSides.1, Theme.artworkReferenceSides.2)
+        if side <= a { return small }
+        if side <= b { return small + (normal - small) * (side - a) / (b - a) }
+        if side <= c { return normal + (large - normal) * (side - b) / (c - b) }
+        return large
+    }
+
+    var sideMargin: CGFloat { value(14, 16, 20) }
+    var bottomMargin: CGFloat { value(10, 12, 16) }
+    var capsuleHeight: CGFloat { value(26, 30, 32) }
+    var buttonWidth: CGFloat { value(24, 28, 30) }
+    var buttonHeight: CGFloat { value(20, 24, 26) }
+    var buttonIcon: CGFloat { value(12, 13, 14) }
+    var glyphCircle: CGFloat { value(26, 28, 30) }
+    var glyph: CGFloat { value(14, 16, 17) }
+    var title: CGFloat { value(15, 18, 22) }
+    var artist: CGFloat { value(12, 13, 15) }
+    var moreButton: CGFloat { value(24, 28, 30) }
+    var time: CGFloat { value(10, 11, 12) }
+    var transportHeight: CGFloat { value(34, 40, 46) }
+    var play: CGFloat { value(22, 26, 30) }
+    var skip: CGFloat { value(20, 24, 28) }
+    var shuffle: CGFloat { value(15, 15, 17) }
+    /// Ratio to the normal size, for the few things without their own measure.
+    var ratio: CGFloat { capsuleHeight / 30 }
 }
 
 // MARK: - Artwork mode scale
 
 private struct UIScaleKey: EnvironmentKey {
     static let defaultValue: CGFloat = 1
+}
+
+private struct ArtworkMetricsKey: EnvironmentKey {
+    static let defaultValue = ArtworkMetrics(side: 320)
 }
 
 private struct ArtworkSideKey: EnvironmentKey {
@@ -135,6 +181,12 @@ extension EnvironmentValues {
     var uiScale: CGFloat {
         get { self[UIScaleKey.self] }
         set { self[UIScaleKey.self] = newValue }
+    }
+
+    /// Artwork mode's measures for its current side.
+    var artworkMetrics: ArtworkMetrics {
+        get { self[ArtworkMetricsKey.self] }
+        set { self[ArtworkMetricsKey.self] = newValue }
     }
 
     /// Artwork side in points (to line up the capsules' glass with the artwork behind them).
