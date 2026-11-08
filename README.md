@@ -12,6 +12,9 @@ in either app.
 | **Compact** | 320 × 136 | Thumbnail, title, time and controls. The background takes the artwork's color. |
 | **Island** | 300 × 44 | A pill at the top center of the screen. It opens downward on hover. |
 
+- Small artwork shows less: under 300 the chip turns into a dot and the audio output and
+  mode buttons step aside; under 250 only lyrics and volume stay up top, and the times
+  appear when you point at the bar. Everything is still in the menu.
 - **Resize** artwork from any corner or side. Push its top or bottom edge in to turn it
   into compact; pull compact's bottom or sides out to turn it back into artwork.
 - **Drag** artwork or compact to the top center of the screen and let go: it becomes the

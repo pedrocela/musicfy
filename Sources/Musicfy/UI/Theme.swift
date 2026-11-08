@@ -7,6 +7,9 @@ enum Theme {
     static let artworkSize = CGSize(width: 320, height: 320)
     /// Artwork mode resizes from its corners and sides; always square.
     static let artworkSideRange: ClosedRange<CGFloat> = 200...640
+    /// Below these sides artwork mode shows fewer controls (see `ArtworkDensity`).
+    static let artworkReducedBelow: CGFloat = 300
+    static let artworkMinimalBelow: CGFloat = 250
     static let compactSize = CGSize(width: 320, height: 136)
     static let islandCollapsed = CGSize(width: 300, height: 44)
     static let islandExpanded = CGSize(width: 380, height: 160)
@@ -82,6 +85,28 @@ enum Theme {
     static let morph = Animation.timingCurve(0.22, 1, 0.36, 1, duration: morphDuration)
     /// How long the controls stay after the mouse leaves.
     static let hoverExitDelay: TimeInterval = 0.3
+}
+
+// MARK: - Artwork mode density
+
+/// How much artwork mode shows on hover, by size. Everything dropped is still in the menu.
+enum ArtworkDensity: Comparable {
+    /// 250 and below: chip as a dot, only lyrics and volume up top, times on hover.
+    case minimal
+    /// 250 to 300: chip as a dot, no audio output or mode button, no favorite star.
+    case reduced
+    /// 300 and up: everything.
+    case full
+
+    init(side: CGFloat) {
+        if side < Theme.artworkMinimalBelow {
+            self = .minimal
+        } else if side < Theme.artworkReducedBelow {
+            self = .reduced
+        } else {
+            self = .full
+        }
+    }
 }
 
 // MARK: - Artwork mode scale

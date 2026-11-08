@@ -15,6 +15,7 @@ struct ArtworkModeView: View {
             let side = geo.size.width
             // Controls grow with the square root of the size: at 640 pt they are 41 % larger, not twice.
             let scale = (max(side, 1) / Theme.artworkSize.width).squareRoot()
+            let density = ArtworkDensity(side: side)
             ZStack {
                 CrossfadingArtwork(player: player)
                 if showControls {
@@ -23,7 +24,7 @@ struct ArtworkModeView: View {
                 }
                 WindowDragArea(onDoubleClick: panel.actions.toggleArtworkCompact)
                 if showControls {
-                    controls(scale: scale)
+                    controls(scale: scale, density: density)
                         .transition(.opacity)
                 }
             }
@@ -34,16 +35,18 @@ struct ArtworkModeView: View {
         .animation(Theme.fade, value: showControls)
     }
 
-    private func controls(scale s: CGFloat) -> some View {
+    private func controls(scale s: CGFloat, density: ArtworkDensity) -> some View {
         VStack(spacing: 0) {
             HStack {
                 if let kind = player.state?.source {
-                    SourceChip(kind: kind, player: player)
+                    SourceChip(kind: kind, showsName: density == .full, player: player)
                 }
                 Spacer(minLength: 8)
-                GlassCapsule(player: player, settings: settings, panel: panel)
+                if hasTopButtons(density) {
+                    GlassCapsule(player: player, settings: settings, panel: panel, density: density)
+                }
             }
-            .padding([.top, .horizontal], 12 * s)
+            .padding([.top, .horizontal], (density == .minimal ? 10 : 12) * s)
 
             Spacer(minLength: 0)
 
@@ -63,7 +66,7 @@ struct ArtworkModeView: View {
                         .transition(.opacity)
                     }
                     .animation(Theme.crossfade, value: player.state?.trackKey)
-                    if player.state?.source.supportsFavorite == true {
+                    if density == .full, player.state?.source.supportsFavorite == true {
                         RoundButton(
                             symbol: player.state?.favorited == true ? "star.fill" : "star",
                             help: "Favorite",
@@ -72,16 +75,23 @@ struct ArtworkModeView: View {
                     }
                     RoundButton(symbol: "ellipsis", help: "More Options", action: panel.actions.showMenu)
                 }
-                TimeBar(player: player, stacked: true)
+                TimeBar(player: player, stacked: true, timesOnHover: density == .minimal)
                     .padding(.top, 8 * s)
                 TransportRow(player: player, size: .large)
                     .padding(.top, 1 * s)
             }
-            .padding(.horizontal, 18 * s)
+            .padding(.horizontal, (density == .minimal ? 14 : 18) * s)
             .padding(.bottom, 6 * s)
             // A whisper of shadow so white text holds up on very light artwork.
             .shadow(color: .black.opacity(0.16), radius: 5, y: 1)
         }
+    }
+
+    /// Whether the capsule at the top right would hold anything at this size.
+    private func hasTopButtons(_ density: ArtworkDensity) -> Bool {
+        if density == .full || panel.volumeOpen { return true }
+        return settings.showLyricsButton || settings.showVolume
+            || (density == .reduced && settings.showQueueButton)
     }
 
     /// Under the controls: the progressively blurred artwork (computed once per artwork)

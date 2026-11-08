@@ -8,12 +8,49 @@ struct SourceChip: View {
     enum Style { case glass, plain }
     let kind: SourceKind
     var style: Style = .glass
+    /// False in small artwork: just the dot, in a glass circle.
+    var showsName = true
     /// For artwork mode's glass and for opening the app.
     @ObservedObject var player: PlayerController
     @Environment(\.uiScale) private var scale
     @State private var hovering = false
 
     var body: some View {
+        if showsName {
+            named
+        } else {
+            dot
+        }
+    }
+
+    private var dot: some View {
+        Button { player.open(kind) } label: {
+            ZStack {
+                Circle()
+                    .fill(Theme.sourceColor(kind))
+                    .frame(width: 8 * scale, height: 8 * scale)
+                    .opacity(hovering ? 0 : 1)
+                Image(systemName: "arrow.up.forward")
+                    .font(.system(size: 10 * scale, weight: .bold))
+                    .foregroundStyle(Theme.primary)
+                    .opacity(hovering ? 1 : 0)
+                    .scaleEffect(hovering ? 1 : 0.6)
+            }
+            .frame(width: 26 * scale, height: 26 * scale)
+            .background(
+                GlassBackdrop(player: player, shape: Circle())
+                    .overlay(Circle().fill(Color.white.opacity(hovering ? 0.08 : 0)))
+            )
+            .contentShape(Circle())
+        }
+        .buttonStyle(PressableStyle())
+        .help("Open \(kind.displayName)")
+        .onHover { hovering = $0 }
+        .animation(Theme.fade, value: hovering)
+        .animation(Theme.crossfade, value: kind)
+    }
+
+    private var named: some View {
         Button { player.open(kind) } label: {
             HStack(spacing: (style == .glass ? 6 : 5) * scale) {
                 Circle()
@@ -55,7 +92,10 @@ struct TimeBar: View {
     var fill: Color = Theme.barFill
     /// Times below the bar, at each end (artwork mode, as in Music).
     var stacked = false
+    /// Small artwork: the times stay hidden until the pointer is over the bar.
+    var timesOnHover = false
     @State private var dragFraction: Double?
+    @State private var hovering = false
     @Environment(\.uiScale) private var scale
 
     var body: some View {
@@ -83,7 +123,11 @@ struct TimeBar: View {
                             Spacer(minLength: 8)
                             remaining
                         }
+                        .opacity(!timesOnHover || hovering || dragFraction != nil ? 1 : 0)
                     }
+                    .contentShape(Rectangle())
+                    .onHover { hovering = $0 }
+                    .animation(Theme.fade, value: hovering)
                 } else {
                     HStack(spacing: 10) {
                         elapsed.frame(minWidth: 30, alignment: .leading)
@@ -192,6 +236,8 @@ struct ToolbarIcons: View {
     var tint: Color = Theme.primary
     /// Compact can't fit everything: audio output stays in the menu.
     var includesOutput = true
+    /// Small artwork drops Up Next too.
+    var includesQueue = true
     @Environment(\.uiScale) private var scale
 
     var body: some View {
@@ -205,7 +251,7 @@ struct ToolbarIcons: View {
                     }
                 }
             }
-            if settings.showQueueButton, panel.mode != .island {
+            if settings.showQueueButton, includesQueue, panel.mode != .island {
                 icon("list.bullet", "Up Next", active: panel.drawer == .queue) {
                     panel.drawer = panel.drawer == .queue ? .none : .queue
                 }
@@ -265,6 +311,7 @@ struct GlassCapsule: View {
     @ObservedObject var player: PlayerController
     @ObservedObject var settings: Settings
     @ObservedObject var panel: PanelModel
+    var density: ArtworkDensity = .full
     @Environment(\.uiScale) private var scale
 
     var body: some View {
@@ -284,12 +331,19 @@ struct GlassCapsule: View {
                         onCommit: { player.setVolume(Int(($0 * 100).rounded())) },
                         smoothFill: false
                     )
-                    .frame(width: 112 * scale)
+                    .frame(width: (density == .minimal ? 88 : 112) * scale)
                     .padding(.trailing, 10 * scale)
                 }
                 .transition(.opacity.combined(with: .scale(scale: 0.9, anchor: .trailing)))
             } else {
-                ToolbarIcons(player: player, settings: settings, panel: panel, modeSwitch: .compact)
+                ToolbarIcons(
+                    player: player,
+                    settings: settings,
+                    panel: panel,
+                    modeSwitch: density == .full ? .compact : nil,
+                    includesOutput: density == .full,
+                    includesQueue: density != .minimal
+                )
                     .transition(.opacity.combined(with: .scale(scale: 0.9, anchor: .trailing)))
             }
         }
