@@ -48,6 +48,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var resizeStartFrame = NSRect.zero
     private var resizeStartSide: CGFloat = 0
     private var resizeSwitchedMode = false
+    /// The still window during a live artwork resize, and the player's rect on screen inside it.
+    private var resizeCanvas: NSRect?
+    private var canvasEdges: ResizeEdges = []
+    private var liveFrame = NSRect.zero
     private var hideHotKey: HotKey?
     private var grip: ResizeGripView!
 
@@ -531,13 +535,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     // MARK: - Resizing from the edges
 
-    /// Artwork: every edge (with a panel open, the bottom belongs to the panel).
-    /// Compact: sides and bottom, to stretch it into the artwork. Island: none.
+    /// Artwork: every edge. Compact: sides and bottom, to stretch it into the artwork.
+    /// With lyrics or Up Next open below, the bottom edge belongs to that panel. Island: none.
     private var resizableEdges: ResizeEdges {
-        guard !transitioning, panelModel.drawer == .none || panelModel.mode == .artwork else { return [] }
+        guard !transitioning else { return [] }
+        let open = panelModel.drawer != .none
         switch panelModel.mode {
-        case .artwork: return panelModel.drawer == .none ? .all : [.left, .right, .top]
-        case .compact: return [.left, .right, .bottom]
+        case .artwork: return open ? [.left, .right, .top] : .all
+        case .compact: return open ? [.left, .right] : [.left, .right, .bottom]
         case .island: return []
         }
     }
@@ -550,20 +555,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     /// Returns `false` when the gesture ends in another mode.
     private func resize(edges: ResizeEdges, dx: CGFloat, dy: CGFloat) -> Bool {
-        resizeLog.debug("step mode=\(self.panelModel.mode.rawValue, privacy: .public) edges=\(edges.rawValue, privacy: .public) dx=\(Int(dx), privacy: .public) dy=\(Int(dy), privacy: .public)")
+        resizeLog.notice("step mode=\(self.panelModel.mode.rawValue, privacy: .public) edges=\(edges.rawValue, privacy: .public) dx=\(Int(dx), privacy: .public) dy=\(Int(dy), privacy: .public) mouse=\(NSStringFromPoint(NSEvent.mouseLocation), privacy: .public) window=\(NSStringFromRect(self.panel.frame), privacy: .public) live=\(NSStringFromRect(self.liveFrame), privacy: .public)")
         let range = Theme.artworkSideRange
         switch panelModel.mode {
         case .artwork:
             let extra = panelModel.drawer == .none ? 0 : Theme.drawerHeight
             // Only the top or bottom edge, pushed inward, squashes it into compact: it follows
             // the mouse 1:1 while compact fades in over it.
-            if edges == .top || edges == .bottom, panelModel.drawer == .none {
+            // With a panel open below, only the top edge does it, and the panel stays.
+            if edges == .top || edges == .bottom {
                 let squash = edges == .bottom ? dy : -dy
                 if squash > 0 {
                     let compact = Theme.compactSize
                     let progress = min(1, squash / max(1, resizeStartSide - compact.height))
                     let width = resizeStartSide + (compact.width - resizeStartSide) * progress
-                    let height = resizeStartSide + (compact.height - resizeStartSide) * progress
+                    let height = resizeStartSide + (compact.height - resizeStartSide) * progress + extra
                     let top = edges == .top ? resizeStartFrame.minY + height : resizeStartFrame.maxY
                     panelModel.squash = progress
                     applyLiveResize(NSRect(x: resizeStartFrame.minX, y: top - height, width: width, height: height))
@@ -597,12 +603,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             let area = usableArea(for: resizeStartFrame)
             let roomWide = edges.contains(.left) ? resizeStartFrame.maxX - area.minX : area.maxX - resizeStartFrame.minX
             let roomHigh = edges.contains(.top) ? area.maxY - resizeStartFrame.minY : resizeStartFrame.maxY - area.minY
-            side = min(side, max(range.lowerBound, min(roomWide, roomHigh - extra)))
+            side = min(side, range.upperBound + 40, max(range.lowerBound, min(roomWide, roomHigh - extra)))
             // The corner opposite the one being pulled stays exactly where it was.
             let height = side + extra
             let left = edges.contains(.left) ? resizeStartFrame.maxX - side : resizeStartFrame.minX
             let bottom = edges.contains(.top) ? resizeStartFrame.minY : resizeStartFrame.maxY - height
-            applyLiveResize(NSRect(x: left, y: bottom, width: side, height: height), side: side)
+            let frame = NSRect(x: left, y: bottom, width: side, height: height)
+            if edges.contains(.left) || edges.contains(.right) {
+                // Corners and sides: the window holds still and the player is drawn inside it.
+                if resizeCanvas == nil {
+                    openCanvas(edges: edges, room: CGSize(width: roomWide, height: roomHigh))
+                }
+                showLive(frame, side: side)
+            } else {
+                applyLiveResize(frame, side: side)
+            }
             return true
 
         case .compact:
@@ -613,9 +628,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             if edges.contains(.left) { growth = max(growth, -dx) }
             let side = panelModel.artworkSide
             let base = Theme.compactSize
+            let extra = panelModel.drawer == .none ? 0 : Theme.drawerHeight
             let progress = min(1, max(0, growth / max(1, side - base.height)))
             let width = base.width + (side - base.width) * progress
-            let height = base.height + (side - base.height) * progress
+            let height = base.height + (side - base.height) * progress + extra
             let left = edges.contains(.left) ? resizeStartFrame.maxX - width : resizeStartFrame.minX
             panelModel.grow = progress
             let frame = NSRect(x: left, y: resizeStartFrame.maxY - height, width: width, height: height)
@@ -625,6 +641,61 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         case .island:
             return false
         }
+    }
+
+    /// Grows the window, once, to hold any size the gesture can reach from the fixed corner,
+    /// with the player drawn where it was. From here on only the drawing changes.
+    private func openCanvas(edges: ResizeEdges, room: CGSize) {
+        let extra = panelModel.drawer == .none ? 0 : Theme.drawerHeight
+        let reach = min(Theme.artworkSideRange.upperBound + 40, room.width, room.height - extra)
+        let width = max(reach, resizeStartFrame.width)
+        let height = max(reach + extra, resizeStartFrame.height)
+        let canvas = NSRect(
+            x: edges.contains(.left) ? resizeStartFrame.maxX - width : resizeStartFrame.minX,
+            y: edges.contains(.top) ? resizeStartFrame.minY : resizeStartFrame.maxY - height,
+            width: width,
+            height: height
+        )
+        resizeCanvas = canvas
+        canvasEdges = edges
+        applyingFrame = true // the window moves, the player doesn't: keep the saved position
+        showLive(resizeStartFrame, side: resizeStartSide)
+        panel.setFrame(canvas, display: true)
+        resizeLog.notice("canvas \(NSStringFromRect(canvas), privacy: .public) from \(NSStringFromRect(self.resizeStartFrame), privacy: .public)")
+    }
+
+    /// Draws the player at `frame` (screen points) inside the still canvas window.
+    private func showLive(_ frame: NSRect, side: CGFloat, animation: Animation? = nil) {
+        guard let canvas = resizeCanvas else { return }
+        liveFrame = frame
+        let rect = CGRect(
+            x: frame.minX - canvas.minX,
+            y: canvas.maxY - frame.maxY,
+            width: frame.width,
+            height: frame.height
+        )
+        var transaction = Transaction(animation: animation)
+        transaction.disablesAnimations = animation == nil
+        withTransaction(transaction) {
+            panelModel.artworkSide = side
+            panelModel.liveRect = rect
+        }
+        panel.invalidateShadow()
+    }
+
+    /// Back to a window the size of the player.
+    private func closeCanvas() {
+        guard resizeCanvas != nil else { return }
+        let frame = liveFrame
+        resizeCanvas = nil
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction) { panelModel.liveRect = nil }
+        panel.setFrame(frame, display: true)
+        applyingFrame = false
+        anchor = NSPoint(x: frame.minX, y: frame.maxY)
+        panel.invalidateShadow()
+        resizeLog.notice("closed at \(NSStringFromRect(frame), privacy: .public)")
     }
 
     /// One step of a live resize: the model, the window and the layout change together,
@@ -644,7 +715,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     private func endResize() {
-        resizeLog.notice("end mode=\(self.panelModel.mode.rawValue, privacy: .public) grow=\(Double(self.panelModel.grow), privacy: .public) squash=\(Double(self.panelModel.squash), privacy: .public) switched=\(self.resizeSwitchedMode, privacy: .public)")
+        resizeLog.notice("end window=\(NSStringFromRect(self.panel.frame), privacy: .public) mode=\(self.panelModel.mode.rawValue, privacy: .public) grow=\(Double(self.panelModel.grow), privacy: .public) squash=\(Double(self.panelModel.squash), privacy: .public) switched=\(self.resizeSwitchedMode, privacy: .public)")
         guard !resizeSwitchedMode else { return }
         let startAnchor = NSPoint(x: resizeStartFrame.minX, y: resizeStartFrame.maxY)
         switch panelModel.mode {
@@ -674,6 +745,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             }
             let range = Theme.artworkSideRange
             let clamped = min(max(panelModel.artworkSide, range.lowerBound), range.upperBound)
+            if resizeCanvas != nil {
+                guard clamped != panelModel.artworkSide else {
+                    closeCanvas()
+                    return
+                }
+                // Past the minimum or maximum: the rubber springs back inside the canvas,
+                // toward the fixed corner, then the window shrinks to fit.
+                let extra = panelModel.drawer == .none ? 0 : Theme.drawerHeight
+                let target = NSRect(
+                    x: canvasEdges.contains(.left) ? liveFrame.maxX - clamped : liveFrame.minX,
+                    y: canvasEdges.contains(.top) ? liveFrame.minY : liveFrame.maxY - clamped - extra,
+                    width: clamped,
+                    height: clamped + extra
+                )
+                showLive(target, side: clamped, animation: Theme.smooth)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
+                    Task { @MainActor in self?.closeCanvas() }
+                }
+                return
+            }
             if clamped != panelModel.artworkSide { panelModel.artworkSide = clamped }
             let target = framedRect(for: .artwork)
             if target != panel.frame {

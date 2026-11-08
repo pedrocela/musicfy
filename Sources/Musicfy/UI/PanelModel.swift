@@ -32,6 +32,10 @@ final class PanelModel: ObservableObject {
     @Published var grow: CGFloat = 0
     /// Artwork being squashed into compact from its top or bottom edge: 0 to 1.
     @Published var squash: CGFloat = 0
+    /// While artwork is resized from a corner or side, the window stays still (big enough for
+    /// any size) and the player is drawn at this rect inside it, in window points from the
+    /// top left. Resizing the window itself made its content trail a frame behind and wobble.
+    @Published var liveRect: CGRect?
 
     var actions = PanelActions()
 
