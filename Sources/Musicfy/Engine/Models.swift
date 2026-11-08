@@ -1,9 +1,10 @@
 import AppKit
 
-/// The two apps Musicfy can read and control.
+/// The apps Musicfy can read and control.
 enum SourceKind: String, CaseIterable, Identifiable {
     case music
     case spotify
+    case podcasts
 
     var id: String { rawValue }
 
@@ -11,6 +12,7 @@ enum SourceKind: String, CaseIterable, Identifiable {
         switch self {
         case .music: return "com.apple.Music"
         case .spotify: return "com.spotify.client"
+        case .podcasts: return "com.apple.podcasts"
         }
     }
 
@@ -18,6 +20,7 @@ enum SourceKind: String, CaseIterable, Identifiable {
         switch self {
         case .music: return "Music"
         case .spotify: return "Spotify"
+        case .podcasts: return "Podcasts"
         }
     }
 
@@ -47,6 +50,19 @@ enum SourceKind: String, CaseIterable, Identifiable {
 
     /// Spotify doesn't expose "like" through AppleScript; Music does (favorite).
     var supportsFavorite: Bool { self == .music }
+
+    /// Podcasts plays episodes: no app volume, shuffle, repeat, lyrics or queue, and the
+    /// skip buttons jump back 15 s and ahead 30 s instead of changing songs.
+    var isSpokenWord: Bool { self == .podcasts }
+    var hasAppVolume: Bool { !isSpokenWord }
+    var hasPlayModes: Bool { !isSpokenWord }
+    var hasLyrics: Bool { !isSpokenWord }
+    var hasQueue: Bool { !isSpokenWord }
+
+    var previousSymbol: String { isSpokenWord ? "gobackward.15" : "backward.fill" }
+    var nextSymbol: String { isSpokenWord ? "goforward.30" : "forward.fill" }
+    var previousHelp: String { isSpokenWord ? "Back 15 Seconds" : "Previous" }
+    var nextHelp: String { isSpokenWord ? "Forward 30 Seconds" : "Next" }
 }
 
 enum RepeatMode: String {
@@ -85,9 +101,14 @@ struct PlayerState: Equatable {
     var repeatMode: RepeatMode
     var favorited: Bool
     var artworkURL: URL?
+    /// Changes when the app hands over new artwork for the same item (Podcasts sends the
+    /// episode first and its artwork a moment later).
+    var artworkTag: String = ""
 
     var subtitle: String {
-        [artist, album].filter { !$0.isEmpty }.joined(separator: " — ")
+        // A podcast's show is often both the artist and the album.
+        let parts = album.caseInsensitiveCompare(artist) == .orderedSame ? [artist] : [artist, album]
+        return parts.filter { !$0.isEmpty }.joined(separator: " — ")
     }
 
     /// Identifies the song, to know when to fetch new artwork or lyrics.

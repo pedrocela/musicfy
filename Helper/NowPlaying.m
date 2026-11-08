@@ -187,11 +187,12 @@ void musicfy_now_playing_run(void *perl, void *cv) {
                 scheduleEmit();
             }];
         }
-        readCommands();
         if (getenv("MUSICFY_NP_ONCE")) {
+            // Diagnostics: print what's playing and quit (the artwork may follow in a second line).
             emit();
-            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 1 * NSEC_PER_SEC), queue, ^{ exit(0); });
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 1500 * NSEC_PER_MSEC), queue, ^{ exit(0); });
         } else {
+            readCommands();
             scheduleEmit();
         }
     }

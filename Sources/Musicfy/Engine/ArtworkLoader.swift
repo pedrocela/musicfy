@@ -63,6 +63,26 @@ final class ArtworkLoader {
         return await image(from: big, maxPixels: maxPixels)
     }
 
+    /// A show's artwork from Apple's catalog, by its name.
+    func searchPodcast(show: String, maxPixels: Int = ArtworkLoader.fullSize) async -> NSImage? {
+        guard !show.isEmpty else { return nil }
+        var components = URLComponents(string: "https://itunes.apple.com/search")!
+        components.queryItems = [
+            URLQueryItem(name: "term", value: show),
+            URLQueryItem(name: "media", value: "podcast"),
+            URLQueryItem(name: "entity", value: "podcast"),
+            URLQueryItem(name: "limit", value: "1"),
+        ]
+        guard let url = components.url,
+              let (data, _) = try? await session.data(from: url),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let first = (json["results"] as? [[String: Any]])?.first,
+              let link = (first["artworkUrl600"] ?? first["artworkUrl100"]) as? String,
+              let big = URL(string: link)
+        else { return nil }
+        return await image(from: big, maxPixels: maxPixels)
+    }
+
     /// Decodes now (call it off the main thread) and scales down to `maxPixels` on the
     /// longest side. The result is a plain bitmap: drawing it costs nothing extra.
     static func decode(_ data: Data, maxPixels: Int = fullSize) -> NSImage? {

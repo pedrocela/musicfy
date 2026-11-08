@@ -111,7 +111,7 @@ enum Menus {
                 menu.add("Favorite", key: "l", icon: state.favorited ? "star.fill" : "star") { player.toggleFavorite() }
             }
             menu.add("Show in \(state.source.displayName)", icon: "arrow.up.forward.app") { player.open(state.source) }
-            menu.add("Copy Song Link", icon: "link") {
+            menu.add(state.source.isSpokenWord ? "Copy Episode Link" : "Copy Song Link", icon: "link") {
                 Task {
                     guard let url = await TrackLink.url(for: state) else { NSSound.beep(); return }
                     NSPasteboard.general.clearContents()
@@ -125,7 +125,7 @@ enum Menus {
         // everything but play/pause: one playback card and the volume take their place.
         if app.panelModel.mode == .artwork, app.panelModel.artworkDensity <= .small, player.state != nil {
             menu.addItem(viewItem(MenuTransportView(player: player)))
-            menu.addItem(volumeItem(player: player))
+            if player.state?.source.hasAppVolume != false { menu.addItem(volumeItem(player: player)) }
             menu.addItem(.separator())
         }
 

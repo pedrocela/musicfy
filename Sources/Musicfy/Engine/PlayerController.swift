@@ -1,7 +1,7 @@
 import AppKit
 import Combine
 
-/// The heart of Musicfy: reads both apps, decides which one to show and sends commands.
+/// The heart of Musicfy: reads the apps, decides which one to show and sends commands.
 /// The UI only watches what this class publishes and calls its methods.
 @MainActor
 final class PlayerController: ObservableObject {
@@ -49,9 +49,11 @@ final class PlayerController: ObservableObject {
 
     let settings: Settings
 
-    private let sources: [SourceKind: MediaSource] = [
+    private let podcasts = PodcastsSource()
+    private lazy var sources: [SourceKind: MediaSource] = [
         .music: MusicSource(),
         .spotify: SpotifySource(),
+        .podcasts: podcasts,
     ]
     private var lastStates: [SourceKind: PlayerState] = [:]
     private var startedAt: [SourceKind: Date] = [:]
@@ -106,6 +108,10 @@ final class PlayerController: ObservableObject {
                 SourceKind.forgetInstalled()
                 Task { @MainActor in self?.refreshSoon(0.5) }
             })
+        }
+        // Podcasts has no notification of its own; its Now Playing reader says when it changes.
+        podcasts.onChange = { [weak self] in
+            MainActor.assumeIsolated { self?.refresh() }
         }
         scheduleTimer()
         refresh()
@@ -215,7 +221,7 @@ final class PlayerController: ObservableObject {
             } else if let current = state?.source, let same = lastStates[current] {
                 chosen = same
             } else {
-                chosen = lastStates[.music] ?? lastStates[.spotify]
+                chosen = lastStates[.music] ?? lastStates[.spotify] ?? lastStates[.podcasts]
             }
         }
         if chosen != state {
@@ -263,7 +269,7 @@ final class PlayerController: ObservableObject {
     // MARK: - Artwork and lyrics
 
     private func loadArtwork(for state: PlayerState) {
-        let key = state.trackKey
+        let key = state.artworkTag.isEmpty ? state.trackKey : "\(state.trackKey)|\(state.artworkTag)"
         guard key != artworkKey else { return }
         artworkKey = key
         if let hit = ArtworkLoader.shared.cached(key) {
@@ -273,7 +279,7 @@ final class PlayerController: ObservableObject {
         let source = sources[state.source]
         Task {
             var image: NSImage?
-            if let source, state.source == .music {
+            if let source, state.source == .music || state.source == .podcasts {
                 image = await withCheckedContinuation { continuation in
                     AppleScriptRunner.shared.queue.async {
                         continuation.resume(returning: source.fetchEmbeddedArtwork())
@@ -283,7 +289,10 @@ final class PlayerController: ObservableObject {
             if image == nil, let url = state.artworkURL {
                 image = await ArtworkLoader.shared.image(from: url)
             }
-            if image == nil {
+            if image == nil, state.source == .podcasts {
+                // The artwork usually comes a moment after the episode; until then, the show's.
+                image = await ArtworkLoader.shared.searchPodcast(show: state.artist.isEmpty ? state.album : state.artist)
+            } else if image == nil {
                 image = await ArtworkLoader.shared.searchCatalog(artist: state.artist, album: state.album, title: state.title)
             }
             guard self.artworkKey == key else { return }
@@ -296,6 +305,11 @@ final class PlayerController: ObservableObject {
         let key = state.trackKey
         guard key != lyricsKey else { return }
         lyricsKey = key
+        guard state.source.hasLyrics else {
+            lyrics = nil
+            lyricsLoading = false
+            return
+        }
         lyrics = nil
         lyricsLoading = true
         Task {
@@ -383,7 +397,7 @@ final class PlayerController: ObservableObject {
     /// at most one every 50 ms (always ending on the last value), and the state is read
     /// back only once the slider settles.
     func setVolume(_ volume: Int) {
-        guard activeSource != nil else { return }
+        guard activeSource != nil, state?.source.hasAppVolume == true else { return }
         update { $0.volume = volume }
         if volumeThrottled {
             pendingVolume = volume
@@ -414,14 +428,14 @@ final class PlayerController: ObservableObject {
     }
 
     func toggleShuffle() {
-        guard let source = activeSource, let on = state?.shuffle else { return }
+        guard let source = activeSource, let on = state?.shuffle, state?.source.hasPlayModes == true else { return }
         update { $0.shuffle = !on }
         source.setShuffle(!on)
         refreshSoon()
     }
 
     func cycleRepeat() {
-        guard let source = activeSource, let state else { return }
+        guard let source = activeSource, let state, state.source.hasPlayModes else { return }
         let next: RepeatMode
         switch (state.source, state.repeatMode) {
         case (.music, .off): next = .all

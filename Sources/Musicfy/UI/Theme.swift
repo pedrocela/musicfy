@@ -83,6 +83,7 @@ enum Theme {
         switch kind {
         case .music: return Color(red: 0.980, green: 0.176, blue: 0.282) // #FA2D48
         case .spotify: return Color(red: 0.118, green: 0.843, blue: 0.376) // #1ED760
+        case .podcasts: return Color(red: 0.698, green: 0.345, blue: 0.937) // #B258EF
         }
     }
 

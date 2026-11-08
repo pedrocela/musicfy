@@ -138,8 +138,10 @@ struct ArtworkModeView: View {
     /// Whether the capsule at the top right would hold anything at this size.
     private var hasTopButtons: Bool {
         if density == .large || panel.volumeOpen { return true }
-        if settings.showLyricsButton || settings.showQueueButton { return true }
-        return density >= .normal && (settings.showOutput || settings.showVolume)
+        let kind = player.state?.source
+        if settings.showLyricsButton && kind?.hasLyrics != false { return true }
+        if settings.showQueueButton && kind?.hasQueue != false { return true }
+        return density >= .normal && (settings.showOutput || (settings.showVolume && kind?.hasAppVolume != false))
     }
 
     /// Under the controls: the progressively blurred artwork (computed once per artwork)

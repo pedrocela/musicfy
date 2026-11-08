@@ -112,21 +112,26 @@ struct MenuTransportView: View {
         let state = player.state
         let playing = state?.isPlaying ?? false
         let repeatMode = state?.repeatMode ?? .off
+        let kind = state?.source ?? .music
         HStack(spacing: 2) {
             MenuTransportButton(symbol: "shuffle", size: 13, active: state?.shuffle == true, help: "Shuffle") {
                 player.toggleShuffle()
             }
-            MenuTransportButton(symbol: "backward.fill", size: 15, help: "Previous") { player.previous() }
+            .opacity(kind.hasPlayModes ? 1 : 0)
+            .allowsHitTesting(kind.hasPlayModes)
+            MenuTransportButton(symbol: kind.previousSymbol, size: 15, help: kind.previousHelp) { player.previous() }
             MenuTransportButton(symbol: playing ? "pause.fill" : "play.fill", size: 19, help: "Play/Pause") {
                 player.playPause()
             }
-            MenuTransportButton(symbol: "forward.fill", size: 15, help: "Next") { player.next() }
+            MenuTransportButton(symbol: kind.nextSymbol, size: 15, help: kind.nextHelp) { player.next() }
             MenuTransportButton(
                 symbol: repeatMode == .one ? "repeat.1" : "repeat",
                 size: 13,
                 active: repeatMode != .off,
                 help: "Repeat"
             ) { player.cycleRepeat() }
+            .opacity(kind.hasPlayModes ? 1 : 0)
+            .allowsHitTesting(kind.hasPlayModes)
         }
         .padding(3)
         .frame(width: 254, height: 40)
