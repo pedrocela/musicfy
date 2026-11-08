@@ -122,7 +122,12 @@ enum Menus {
         }
 
         // Small artwork hides shuffle, repeat and volume from the player: they're here instead.
-        if app.panelModel.mode == .artwork, app.panelModel.artworkDensity == .small, let state = player.state {
+        // Mini artwork shows only play/pause, so previous and next come here too.
+        if app.panelModel.mode == .artwork, app.panelModel.artworkDensity <= .small, let state = player.state {
+            if app.panelModel.artworkDensity == .mini {
+                menu.add("Previous", icon: "backward.fill") { player.previous() }
+                menu.add("Next", icon: "forward.fill") { player.next() }
+            }
             menu.add("Shuffle", checked: state.shuffle, icon: "shuffle") { player.toggleShuffle() }
             menu.add("Repeat", checked: state.repeatMode != .off, icon: state.repeatMode == .one ? "repeat.1" : "repeat") {
                 player.cycleRepeat()

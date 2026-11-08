@@ -3,7 +3,7 @@ import SwiftUI
 /// Artwork mode: just the artwork; on hover the controls appear over glass made from
 /// the artwork itself, progressively blurred toward the bottom (as in Music).
 /// Resizes from its corners and sides; its measures follow the side (`ArtworkMetrics`) and
-/// it shows more controls as it grows (`ArtworkDensity`).
+/// it shows more controls as it grows (`ArtworkDensity`). Mini: on hover, only play/pause.
 struct ArtworkModeView: View {
     @ObservedObject var player: PlayerController
     @ObservedObject var settings: Settings
@@ -20,13 +20,25 @@ struct ArtworkModeView: View {
             ZStack {
                 CrossfadingArtwork(player: player)
                 if showControls {
-                    glass
-                        .transition(.opacity)
+                    Group {
+                        if density == .mini {
+                            Color.black.opacity(0.32).allowsHitTesting(false)
+                        } else {
+                            glass
+                        }
+                    }
+                    .transition(.opacity)
                 }
                 WindowDragArea(onDoubleClick: panel.actions.toggleArtworkCompact)
                 if showControls {
-                    controls(metrics)
-                        .transition(.opacity)
+                    Group {
+                        if density == .mini {
+                            miniControls(side: side)
+                        } else {
+                            controls(metrics)
+                        }
+                    }
+                    .transition(.opacity)
                 }
             }
             .coordinateSpace(name: ArtworkSpace.name)
@@ -49,6 +61,19 @@ struct ArtworkModeView: View {
             density = next
         }
         panel.artworkDensity = next
+    }
+
+    /// Mini: play/pause alone in the middle; everything else is in the "…" menu
+    /// (right click), and a double click turns it into compact.
+    private func miniControls(side: CGFloat) -> some View {
+        let playing = player.state?.isPlaying ?? false
+        return IconButton(
+            symbol: playing ? "pause.fill" : "play.fill",
+            size: min(30, max(22, side * 0.24)),
+            help: "Play/Pause",
+            action: { player.playPause() }
+        )
+        .shadow(color: .black.opacity(0.25), radius: 4, y: 1)
     }
 
     private func controls(_ m: ArtworkMetrics) -> some View {
