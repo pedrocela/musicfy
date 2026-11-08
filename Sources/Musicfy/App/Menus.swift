@@ -121,6 +121,16 @@ enum Menus {
             menu.addItem(.separator())
         }
 
+        // Small artwork hides shuffle, repeat and volume from the player: they're here instead.
+        if app.panelModel.mode == .artwork, app.panelModel.artworkDensity == .small, let state = player.state {
+            menu.add("Shuffle", checked: state.shuffle, icon: "shuffle") { player.toggleShuffle() }
+            menu.add("Repeat", checked: state.repeatMode != .off, icon: state.repeatMode == .one ? "repeat.1" : "repeat") {
+                player.cycleRepeat()
+            }
+            menu.addItem(volumeItem(player: player))
+            menu.addItem(.separator())
+        }
+
         menu.addSubmenu("Audio Output", icon: "hifispeaker") { sub in
             fillOutputs(sub)
         }
@@ -165,6 +175,27 @@ enum Menus {
     }
 
     /// Audio output devices, with a check on the current one, and a way to the system settings.
+    /// A volume slider row, lined up with the titles.
+    static func volumeItem(player: PlayerController) -> NSMenuItem {
+        let item = NSMenuItem()
+        let row = NSView(frame: NSRect(x: 0, y: 0, width: 264, height: 24))
+        let icon = NSImageView(frame: NSRect(x: 16, y: 4, width: 16, height: 16))
+        icon.image = MenuIcon.symbol("speaker.wave.2")
+        icon.contentTintColor = .labelColor
+        let slider = NSSlider(value: Double(player.state?.volume ?? 0), minValue: 0, maxValue: 100, target: nil, action: nil)
+        slider.frame = NSRect(x: 37, y: 2, width: 264 - 37 - 16, height: 20)
+        slider.controlSize = .small
+        slider.isContinuous = true
+        let target = SliderTarget { player.setVolume(Int($0.rounded())) }
+        slider.target = target
+        slider.action = #selector(SliderTarget.changed(_:))
+        item.representedObject = target // keeps the target alive with the item
+        row.addSubview(icon)
+        row.addSubview(slider)
+        item.view = row
+        return item
+    }
+
     static func output() -> NSMenu {
         let menu = NSMenu()
         menu.appearance = NSAppearance(named: .darkAqua)
@@ -192,5 +223,18 @@ enum Menus {
         let item = NSMenuItem()
         item.view = hosting
         return item
+    }
+}
+
+/// Sends an NSSlider's value to a closure.
+final class SliderTarget: NSObject {
+    private let onChange: (Double) -> Void
+
+    init(_ onChange: @escaping (Double) -> Void) {
+        self.onChange = onChange
+    }
+
+    @objc func changed(_ sender: NSSlider) {
+        onChange(sender.doubleValue)
     }
 }

@@ -12,9 +12,10 @@ display, and comes back after (unless you turn on "Show Over Full Screen"). It s
 | **Compact** | 320 × 136 | Thumbnail, title, time and controls. The background takes the artwork's color. |
 | **Island** | 300 × 44 | A pill at the top center of the screen, tinted like compact. It opens downward on hover. |
 
-- Small artwork shows less: under 300 the audio output and
-  mode buttons step aside; under 250 only lyrics and volume stay up top, and the times
-  appear when you point at the bar. Everything is still in the menu.
+- Artwork scales smoothly with its size and shows more as it grows: under 300 only
+  Lyrics and Up Next up top and previous, play and next below (shuffle, repeat and
+  volume move to the menu); from 300 Audio Output, Volume, shuffle and repeat join;
+  from 380 the Compact button too.
 - **Resize** artwork from any corner or side. Push its top or bottom edge in to turn it
   into compact; pull any edge or corner of compact out to turn it back into artwork.
 - **Drag** artwork or compact to the top center of the screen and let go: it becomes the
