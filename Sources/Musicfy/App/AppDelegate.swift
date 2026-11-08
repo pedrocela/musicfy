@@ -89,6 +89,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
         panel = PlayerPanel()
         panel.delegate = self
+        panel.onPlaybackKey = { [weak self] key in
+            guard let player = self?.player else { return }
+            switch key {
+            case .playPause: player.playPause()
+            case .previous: player.previous()
+            case .next: player.next()
+            }
+        }
         let root = RootView(player: player, settings: settings, panel: panelModel)
         let hosting = FirstMouseHostingView(rootView: root)
         hosting.sizingOptions = []

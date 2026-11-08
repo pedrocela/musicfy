@@ -26,6 +26,7 @@ on "Show Over Videos"). It shows whatever is playing in either app.
   Island. **Pull the Island down** and it becomes the artwork again.
 - **Double click** an empty area: switch between artwork and compact.
 - **Right click** the player, or click the menu bar icon: the menu (⌘1, ⌘2, ⌘3 pick a mode).
+- After clicking the player: **Space** plays or pauses, **⌘←** and **⌘→** skip to the previous or next song.
 - **⌥⌘M** from any app: show or hide the player.
 - The **app glyph** (Music's pink note or Spotify's green disc) shows which app is playing; click it to bring that app to the front.
 - When nothing plays, artwork shrinks to compact and comes back when music starts

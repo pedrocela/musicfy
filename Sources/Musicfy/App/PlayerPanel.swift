@@ -26,12 +26,41 @@ final class PlayerPanel: NSPanel {
         isReleasedWhenClosed = false
         animationBehavior = .none
         appearance = NSAppearance(named: .darkAqua)
-        becomesKeyOnlyIfNeeded = true
+        // A click makes it key (without activating the app), so the keyboard
+        // shortcuts below work right after clicking the player.
+        becomesKeyOnlyIfNeeded = false
     }
 
-    // Can take the keyboard without activating the app (for menus and sliders).
+    /// Playback keys while the player has the keyboard.
+    var onPlaybackKey: ((PlaybackKey) -> Void)?
+
+    // Can take the keyboard without activating the app.
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { false }
+
+    // Caught here, before any SwiftUI control, so Space never presses a focused button.
+    override func sendEvent(_ event: NSEvent) {
+        if event.type == .keyDown, let key = PlaybackKey(event) {
+            if !event.isARepeat { onPlaybackKey?(key) }
+            return
+        }
+        super.sendEvent(event)
+    }
+}
+
+/// Space = play/pause, ⌘← = previous, ⌘→ = next.
+enum PlaybackKey {
+    case playPause, previous, next
+
+    init?(_ event: NSEvent) {
+        let mods = event.modifierFlags.intersection([.command, .option, .control, .shift])
+        switch (event.keyCode, mods) {
+        case (49, []): self = .playPause          // Space
+        case (123, [.command]): self = .previous  // ⌘←
+        case (124, [.command]): self = .next      // ⌘→
+        default: return nil
+        }
+    }
 }
 
 /// The first click on the player counts, even when the window isn't focused.
