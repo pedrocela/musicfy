@@ -37,16 +37,20 @@ struct ArtworkModeView: View {
 
     private func controls(scale s: CGFloat, density: ArtworkDensity) -> some View {
         VStack(spacing: 0) {
-            HStack {
+            // The glyph sits 12 from the edges, the capsule 10 from the top and right.
+            HStack(alignment: .top) {
                 if let kind = player.state?.source {
                     SourceChip(kind: kind, player: player)
+                        .padding(.top, 2 * s)
                 }
                 Spacer(minLength: 8)
                 if hasTopButtons(density) {
                     GlassCapsule(player: player, settings: settings, panel: panel, density: density)
                 }
             }
-            .padding([.top, .horizontal], (density == .minimal ? 10 : 12) * s)
+            .padding(.top, 10 * s)
+            .padding(.leading, 12 * s)
+            .padding(.trailing, 10 * s)
 
             Spacer(minLength: 0)
 
