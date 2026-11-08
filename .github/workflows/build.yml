@@ -1,0 +1,19 @@
+name: build
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compilar
+        run: ./build.sh
+      - name: Empaquetar
+        run: ditto -c -k --keepParent build/Musicfy.app build/Musicfy.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Musicfy
+          path: build/Musicfy.zip
