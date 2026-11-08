@@ -1,7 +1,8 @@
 import SwiftUI
 
 /// The drawn part of the "…" menu: the mode selector at the top (inside an NSMenuItem.view).
-/// 254 × 64 container, three 81 × 58 segments. Monochrome; the chosen one is lifted.
+/// A well as wide as the menu (inset like its separators), three equal segments 50 high.
+/// Quiet: the chosen one is lifted and its player drawn in the accent color.
 struct ModeSelectorView: View {
     let current: DisplayMode
     let choose: (DisplayMode) -> Void
@@ -13,10 +14,12 @@ struct ModeSelectorView: View {
             }
         }
         .padding(3)
-        .frame(width: 254, height: 64)
-        .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(MenuInk.well))
-        .padding(.horizontal, 5)
-        .padding(.vertical, 3)
+        .frame(minWidth: 244, maxWidth: .infinity)
+        .frame(height: 56)
+        .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(MenuInk.well))
+        .padding(.horizontal, MenuInk.inset)
+        .padding(.top, 4)
+        .padding(.bottom, 3)
     }
 }
 
@@ -29,20 +32,20 @@ private struct ModeSegment: View {
 
     var body: some View {
         Button(action: action) {
-            VStack(spacing: 5) {
-                ModePictogram(mode: mode)
-                    .frame(width: 36, height: 24)
+            VStack(spacing: 4) {
+                ModePictogram(mode: mode, selected: selected)
+                    .frame(width: 30, height: 19)
                 Text(mode.label)
-                    .font(.system(size: 11, weight: .medium))
+                    .font(.system(size: 11, weight: selected ? .semibold : .regular))
+                    .foregroundStyle(Theme.ink.opacity(selected || hovering ? 0.88 : 0.6))
             }
-            .padding(.bottom, 2)
-            .foregroundStyle(Theme.ink)
-            .opacity(selected || hovering ? 1 : 0.55)
-            .frame(width: 81, height: 58)
+            .padding(.bottom, 1)
+            .frame(maxWidth: .infinity)
+            .frame(height: 50)
             .background(
-                RoundedRectangle(cornerRadius: 5, style: .continuous)
-                    .fill(selected ? MenuInk.lifted : Theme.ink.opacity(hovering ? 0.06 : 0))
-                    .shadow(color: selected ? MenuInk.liftShadow : .clear, radius: 1, y: 1)
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(selected ? MenuInk.lifted : Theme.ink.opacity(hovering ? 0.05 : 0))
+                    .shadow(color: selected ? MenuInk.liftShadow : .clear, radius: 1, y: 0.5)
             )
             .contentShape(Rectangle())
         }
@@ -55,24 +58,26 @@ private struct ModeSegment: View {
 
 /// A tiny screen with its menu bar and the player where it sits in that mode:
 /// a square at the top right (Artwork), a bar (Compact), a pill under the menu bar (Island).
+/// Hairline screen; the player in the accent color when chosen, a soft gray otherwise.
 private struct ModePictogram: View {
     let mode: DisplayMode
-    private let player = Theme.ink
+    let selected: Bool
+    private var player: Color { selected ? Color.accentColor : Theme.ink.opacity(0.45) }
 
     var body: some View {
         ZStack(alignment: .top) {
-            RoundedRectangle(cornerRadius: 3.5, style: .continuous)
-                .fill(Theme.ink.opacity(0.08))
-            RoundedRectangle(cornerRadius: 3.5, style: .continuous)
-                .strokeBorder(Theme.ink.opacity(0.35), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 3, style: .continuous)
+                .fill(Theme.ink.opacity(0.05))
+            RoundedRectangle(cornerRadius: 3, style: .continuous)
+                .strokeBorder(Theme.ink.opacity(selected ? 0.32 : 0.22), lineWidth: 0.75)
             Rectangle()
-                .fill(Theme.ink.opacity(0.28))
-                .frame(height: 3)
-                .padding(.horizontal, 1)
-                .padding(.top, 1)
+                .fill(Theme.ink.opacity(0.16))
+                .frame(height: 2.5)
+                .padding(.horizontal, 0.75)
+                .padding(.top, 0.75)
             playerShape
         }
-        .clipShape(RoundedRectangle(cornerRadius: 3.5, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 3, style: .continuous))
     }
 
     @ViewBuilder
@@ -81,28 +86,28 @@ private struct ModePictogram: View {
         case .artwork:
             RoundedRectangle(cornerRadius: 1.5, style: .continuous)
                 .fill(player)
-                .frame(width: 10, height: 10)
+                .frame(width: 8, height: 8)
                 .frame(maxWidth: .infinity, alignment: .trailing)
-                .padding(.top, 6)
+                .padding(.top, 5)
                 .padding(.trailing, 3)
         case .compact:
             RoundedRectangle(cornerRadius: 1.5, style: .continuous)
                 .fill(player)
-                .frame(width: 15, height: 5)
+                .frame(width: 12, height: 4)
                 .frame(maxWidth: .infinity, alignment: .trailing)
-                .padding(.top, 6)
+                .padding(.top, 5)
                 .padding(.trailing, 3)
         case .island:
             Capsule()
                 .fill(player)
-                .frame(width: 13, height: 4)
-                .padding(.top, 5)
+                .frame(width: 11, height: 3.5)
+                .padding(.top, 4.5)
         }
     }
 }
 
 /// Playback in the "…" menu when the player is too small to show it: one card, shaped like
-/// the mode selector (254 wide), with shuffle, previous, play/pause, next and repeat.
+/// the mode selector (as wide as the menu), with shuffle, previous, play/pause, next and repeat.
 /// The menu stays open, so shuffle and repeat show their new state right away.
 struct MenuTransportView: View {
     @ObservedObject var player: PlayerController
@@ -133,9 +138,10 @@ struct MenuTransportView: View {
             .allowsHitTesting(kind.hasPlayModes)
         }
         .padding(3)
-        .frame(width: 254, height: 40)
-        .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(MenuInk.well))
-        .padding(.horizontal, 5)
+        .frame(minWidth: 244, maxWidth: .infinity)
+        .frame(height: 40)
+        .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(MenuInk.well))
+        .padding(.horizontal, MenuInk.inset)
         .padding(.vertical, 3)
     }
 }
@@ -173,6 +179,8 @@ private struct MenuTransportButton: View {
 /// The menu's drawn parts follow the menu's appearance (the system's): a well a shade off
 /// the menu, and the chosen segment lifted out of it (lighter in dark mode, white in light).
 private enum MenuInk {
+    /// Side inset of the cards, matching the menu's separators.
+    static let inset: CGFloat = 10
     static let well = Theme.adaptive(dark: NSColor(white: 1, alpha: 0.05), light: NSColor(white: 0, alpha: 0.05))
     static let lifted = Theme.adaptive(dark: NSColor(white: 1, alpha: 0.15), light: NSColor(white: 1, alpha: 1))
     static let liftShadow = Theme.adaptive(dark: NSColor(white: 0, alpha: 0.35), light: NSColor(white: 0, alpha: 0.18))
