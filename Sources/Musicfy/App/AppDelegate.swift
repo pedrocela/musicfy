@@ -570,6 +570,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     /// Returns `false` when the gesture ends in another mode.
     private func resize(edges: ResizeEdges, dx: CGFloat, dy: CGFloat) -> Bool {
+        resizeLog.debug("step mode=\(self.panelModel.mode.rawValue, privacy: .public) edges=\(edges.rawValue, privacy: .public) dx=\(Int(dx), privacy: .public) dy=\(Int(dy), privacy: .public)")
         let range = Theme.artworkSideRange
         switch panelModel.mode {
         case .artwork:
@@ -663,6 +664,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     private func endResize() {
+        resizeLog.notice("end mode=\(self.panelModel.mode.rawValue, privacy: .public) grow=\(Double(self.panelModel.grow), privacy: .public) squash=\(Double(self.panelModel.squash), privacy: .public) switched=\(self.resizeSwitchedMode, privacy: .public)")
         guard !resizeSwitchedMode else { return }
         let startAnchor = NSPoint(x: resizeStartFrame.minX, y: resizeStartFrame.maxY)
         switch panelModel.mode {
