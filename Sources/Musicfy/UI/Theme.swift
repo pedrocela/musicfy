@@ -59,8 +59,6 @@ enum Theme {
     static let glassEdgeTop = Color.white.opacity(0.32)
     static let glassEdgeBottom = Color.white.opacity(0.06)
     static let windowStroke = Color.white.opacity(0.12)
-    /// Island background: almost black, slightly translucent.
-    static let islandFill = Color(red: 0.055, green: 0.047, blue: 0.043).opacity(0.96)
     static let islandStroke = Color.white.opacity(0.09)
 
     // MARK: Each app's color (the chip's dot)

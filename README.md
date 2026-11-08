@@ -10,7 +10,7 @@ in either app.
 |---|---|---|
 | **Artwork** | 200 to 640, square | Just the artwork. On hover, the controls appear over glass made from the artwork. |
 | **Compact** | 320 × 136 | Thumbnail, title, time and controls. The background takes the artwork's color. |
-| **Island** | 300 × 44 | A pill at the top center of the screen. It opens downward on hover. |
+| **Island** | 300 × 44 | A pill at the top center of the screen, tinted like compact. It opens downward on hover. |
 
 - Small artwork shows less: under 300 the chip turns into a dot and the audio output and
   mode buttons step aside; under 250 only lyrics and volume stay up top, and the times

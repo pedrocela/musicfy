@@ -22,7 +22,9 @@ struct IslandView: View {
         let shape = RoundedRectangle(cornerRadius: Theme.cornerRadius, style: .continuous)
         VStack(alignment: panel.islandAlignment.horizontal, spacing: 0) {
             ZStack(alignment: .top) {
-                Theme.islandFill
+                // Tinted with the artwork's color, like compact.
+                Color(nsColor: player.palette.background)
+                    .animation(Theme.crossfade, value: player.palette)
                 LinearGradient(colors: [Color.white.opacity(0.06), .clear], startPoint: .top, endPoint: .center)
                     .allowsHitTesting(false)
                 IslandDragArea()

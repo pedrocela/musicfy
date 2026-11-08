@@ -149,10 +149,10 @@ struct MorphView: View, Animatable {
             )
             let startRadius: CGFloat = look == .artwork ? Theme.cornerRadius : 8
             ZStack(alignment: .topLeading) {
-                if look == .compact {
-                    Color(nsColor: player.palette.background)
-                }
-                Theme.islandFill.opacity(look == .compact ? Double(p) : Double(min(1, p * 1.6)))
+                // The Island wears the same artwork tint as compact: from compact the
+                // background stays; from artwork it fades in as the cover shrinks.
+                Color(nsColor: player.palette.background)
+                    .opacity(look == .compact ? 1 : Double(min(1, p * 1.6)))
                 ArtworkFill(image: player.artwork)
                     .frame(width: thumb.width, height: thumb.height)
                     .clipShape(RoundedRectangle(cornerRadius: lerp(startRadius, Theme.islandThumbRadius, p), style: .continuous))
