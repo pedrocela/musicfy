@@ -15,7 +15,7 @@ jobs:
           fetch-depth: 0 # the build number is the commit count
       - name: Test
         run: swift test
-      - name: Build (universal: Apple silicon and Intel)
+      - name: Build universal (Apple silicon and Intel)
         run: ARCHS="arm64 x86_64" ./build.sh
       - name: Check architectures
         run: lipo -info build/Musicfy.app/Contents/MacOS/Musicfy
