@@ -5,6 +5,11 @@ window and on every Space, also over full-screen apps. It steps aside while a vi
 in full screen on its display, and comes back when that full screen ends (unless you turn
 on "Show Over Videos"). It shows whatever is playing in either app.
 
+<picture>
+  <source media="(prefers-color-scheme: light)" srcset="docs/hero-light.png">
+  <img src="docs/hero-dark.png" alt="Musicfy on the desktop: the Island under the menu bar, the artwork player with its glass controls, and the compact player">
+</picture>
+
 ## Modes
 
 | Mode | Size | What it is |
