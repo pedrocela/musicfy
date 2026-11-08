@@ -33,6 +33,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var idleCompact = false
     /// Hid itself; comes back when something plays.
     private var autoHidden = false
+    /// Out of the way of a full-screen video or app; back when it leaves full screen.
+    private var hiddenForFullScreen = false
     private var menuOpen = false
     private var applyingFrame = false
     /// The user picked a mode while paused: don't auto-shrink again until something plays.
@@ -126,10 +128,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     // MARK: - Observers
 
     private func observe() {
+        watchFullScreen()
         // Over full-screen apps and videos, only if asked.
         settings.$showOverFullScreen
             .receive(on: RunLoop.main)
-            .sink { [weak self] show in self?.panel.showsOverFullScreen = show }
+            .sink { [weak self] show in
+                self?.panel.showsOverFullScreen = show
+                self?.checkFullScreen()
+            }
             .store(in: &cancellables)
 
         // The mode chosen in Settings.
@@ -954,6 +960,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     func showPanel() {
         autoHidden = false
         guard !panel.isVisible else { return }
+        if !settings.showOverFullScreen, FullScreen.covers(framedOrIslandRect) {
+            hiddenForFullScreen = true // shows when full screen ends
+            return
+        }
         placePanel(for: panelModel.mode)
         panel.alphaValue = 0
         panel.orderFrontRegardless()
@@ -962,7 +972,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     func hidePanel(manual: Bool = true) {
-        if manual { autoHidden = false }
+        if manual {
+            autoHidden = false
+            hiddenForFullScreen = false
+        }
         guard panel.isVisible else { return }
         panelModel.isHovering = false
         panelModel.islandExpanded = false
@@ -973,7 +986,50 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     func togglePanel() {
-        isPanelVisible ? hidePanel() : showPanel()
+        isPanelVisible || hiddenForFullScreen ? hidePanel() : showPanel()
+    }
+
+    /// Where the player would be on screen in its current mode.
+    private var framedOrIslandRect: NSRect {
+        panelModel.mode == .island ? islandWindowRect() : framedRect(for: panelModel.mode)
+    }
+
+    /// Full screen came or went (a Space changed, another app came forward): step aside
+    /// for a full-screen window on the player's display, and come back after.
+    private func checkFullScreen() {
+        let covered = !settings.showOverFullScreen && FullScreen.covers(framedOrIslandRect)
+        if covered, panel.isVisible {
+            hiddenForFullScreen = true
+            panelModel.isHovering = false
+            panelModel.islandExpanded = false
+            panelModel.volumeOpen = false
+            fade(to: 0, duration: 0.15) { [weak self] in
+                guard let self, self.hiddenForFullScreen else { return }
+                self.panel.orderOut(nil)
+            }
+        } else if !covered, hiddenForFullScreen {
+            hiddenForFullScreen = false
+            showPanel()
+        }
+    }
+
+    private func watchFullScreen() {
+        let center = NSWorkspace.shared.notificationCenter
+        for name in [
+            NSWorkspace.activeSpaceDidChangeNotification,
+            NSWorkspace.didActivateApplicationNotification,
+            NSWorkspace.didTerminateApplicationNotification,
+        ] {
+            center.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated {
+                    self?.checkFullScreen()
+                    // Entering full screen animates; look again once it has settled.
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
+                        MainActor.assumeIsolated { self?.checkFullScreen() }
+                    }
+                }
+            }
+        }
     }
 
     private func fade(to alpha: CGFloat, duration: TimeInterval, then completion: (() -> Void)? = nil) {
