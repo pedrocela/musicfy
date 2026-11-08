@@ -55,7 +55,11 @@ To start it automatically: menu → "Open at Login".
   allow from outside). It never launches them: every script first checks that the app
   is running. Commands jump ahead of state reads, so buttons respond right away.
 - It hears about changes instantly through the notifications both apps post, and also
-  reads the state every 1.5 s. The progress bar is interpolated between reads.
+  reads the state every 1.5 s while a song plays on screen (every 4 s when paused or
+  hidden). Between reads, Core Animation moves the progress bar and the Island's ring by
+  itself, so the app stays idle while music plays.
+- Artwork is decoded off the main thread and scaled to the size it's drawn at; the mouse
+  is followed 30 times a second only while it moves.
 - If Music doesn't provide the artwork (Apple Music songs not in the library), it looks
   it up in the public iTunes catalog.
 - The glass in artwork mode is computed with Core Image from the artwork itself: a

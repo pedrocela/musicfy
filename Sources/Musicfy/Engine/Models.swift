@@ -21,9 +21,25 @@ enum SourceKind: String, CaseIterable, Identifiable {
         }
     }
 
+    /// Asking Launch Services is slow, and views ask on every render: the answer is kept
+    /// until an app launches or quits (see `forgetInstalled`).
     var isInstalled: Bool {
-        NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) != nil
+        Self.installedLock.lock()
+        defer { Self.installedLock.unlock() }
+        if let known = Self.installed[self] { return known }
+        let found = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) != nil
+        Self.installed[self] = found
+        return found
     }
+
+    static func forgetInstalled() {
+        installedLock.lock()
+        installed = [:]
+        installedLock.unlock()
+    }
+
+    private static var installed: [SourceKind: Bool] = [:]
+    private static let installedLock = NSLock()
 
     var isRunning: Bool {
         !NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).isEmpty

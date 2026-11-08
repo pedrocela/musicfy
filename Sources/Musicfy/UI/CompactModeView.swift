@@ -36,6 +36,7 @@ struct CompactModeView: View {
             .padding(.bottom, 10)
             .frame(maxHeight: .infinity, alignment: .top)
         }
+        .environment(\.marqueeOnLayer, true)
     }
 
     private var header: some View {

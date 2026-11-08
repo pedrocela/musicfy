@@ -121,12 +121,14 @@ private struct QueueThumb: View {
             )
             .task(id: item.id) {
                 guard !sameAlbum else { return }
-                let key = "catalog|\(item.artist)|\(item.album)"
+                let key = "thumb|\(item.artist)|\(item.album)"
                 if let hit = ArtworkLoader.shared.cached(key) {
                     image = hit
                     return
                 }
-                if let found = await ArtworkLoader.shared.searchCatalog(artist: item.artist, album: item.album, title: item.title) {
+                if let found = await ArtworkLoader.shared.searchCatalog(
+                    artist: item.artist, album: item.album, title: item.title, maxPixels: ArtworkLoader.thumbSize
+                ) {
                     ArtworkLoader.shared.store(found, for: key)
                     withAnimation(Theme.fade) { image = found }
                 }

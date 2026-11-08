@@ -47,8 +47,14 @@ struct IslandView: View {
             .overlay(shape.strokeBorder(Theme.islandStroke, lineWidth: 0.5))
             // Pulled down, it grows a little and its rim brightens: it's about to become the artwork.
             .overlay(shape.strokeBorder(Color.white.opacity(0.28 * panel.islandPull), lineWidth: 1))
+            // The shadow comes from a plain shape behind the pill (the tint above covers it).
+            // A shadow of the pill itself is redrawn every time anything inside it moves.
+            .background(
+                shape
+                    .fill(Color.black)
+                    .shadow(color: .black.opacity(expanded ? 0.32 : 0.22), radius: expanded ? 20 : 10, y: expanded ? 10 : 4)
+            )
             .scaleEffect(1 + 0.08 * panel.islandPull, anchor: .top)
-            .shadow(color: .black.opacity(expanded ? 0.32 : 0.22), radius: expanded ? 20 : 10, y: expanded ? 10 : 4)
             .animation(Theme.islandSpring, value: expanded)
             Spacer(minLength: 0)
         }
@@ -59,6 +65,7 @@ struct IslandView: View {
             alignment: Alignment(horizontal: panel.islandAlignment.horizontal, vertical: .top)
         )
         .environment(\.colorScheme, .dark)
+        .environment(\.marqueeOnLayer, true)
         .onAppear {
             withAnimation(Theme.smooth.delay(0.03)) { settled = true }
         }
@@ -186,56 +193,125 @@ private struct ProgressRing: View {
     let accent: Color
 
     var body: some View {
-        TimelineView(.periodic(from: .now, by: 0.5)) { context in
-            let duration = player.state?.duration ?? 0
-            let fraction = duration > 0 ? min(1, player.position(at: context.date) / duration) : 0
+        // No timeline here: Core Animation runs the ring to the end of the song, and it's
+        // set again only when the player publishes something new.
+        ZStack {
+            Circle()
+                .stroke(Color.white.opacity(0.12), lineWidth: 2)
+            ProgressRingLayer(
+                fraction: player.progressFraction(),
+                rate: player.progressRate,
+                color: playing ? accent : Color.white.opacity(0.55)
+            )
             ZStack {
-                Circle()
-                    .stroke(Color.white.opacity(0.12), lineWidth: 2)
-                Circle()
-                    .trim(from: 0, to: fraction)
-                    .stroke(playing ? accent : Color.white.opacity(0.55), style: StrokeStyle(lineWidth: 2, lineCap: .round))
-                    .rotationEffect(.degrees(-90))
-                    .animation(.linear(duration: 0.5), value: fraction)
-                ZStack {
-                    if playing {
-                        Equalizer(color: accent)
-                            .transition(.opacity.combined(with: .scale(scale: 0.5)))
-                    } else {
-                        Image(systemName: "play.fill")
-                            .font(.system(size: 8, weight: .bold))
-                            .foregroundStyle(Color.white.opacity(0.75))
-                            .offset(x: 0.5)
-                            .transition(.opacity.combined(with: .scale(scale: 0.5)))
-                    }
+                if playing {
+                    Equalizer(color: accent)
+                        .frame(width: 9, height: 10)
+                        .transition(.opacity.combined(with: .scale(scale: 0.5)))
+                } else {
+                    Image(systemName: "play.fill")
+                        .font(.system(size: 8, weight: .bold))
+                        .foregroundStyle(Color.white.opacity(0.75))
+                        .offset(x: 0.5)
+                        .transition(.opacity.combined(with: .scale(scale: 0.5)))
                 }
-                .animation(Theme.smooth, value: playing)
             }
-            .frame(width: 22, height: 22)
-            .animation(Theme.crossfade, value: playing)
+            .animation(Theme.smooth, value: playing)
         }
+        .frame(width: 22, height: 22)
+        .animation(Theme.crossfade, value: playing)
         .allowsHitTesting(false)
     }
 }
 
 /// Three bars bouncing at different rhythms.
-private struct Equalizer: View {
+///
+/// Drawn with Core Animation: the bars move in the window server, so the app doesn't
+/// wake up 30 times a second to redraw them while the Island just sits there playing.
+private struct Equalizer: NSViewRepresentable {
     let color: Color
 
-    var body: some View {
-        TimelineView(.animation(minimumInterval: 1 / 30)) { context in
-            let time = context.date.timeIntervalSinceReferenceDate
-            HStack(alignment: .center, spacing: 1.5) {
-                ForEach(0..<3, id: \.self) { bar in
-                    let speed = [1.05, 0.8, 1.3][bar]
-                    let phase = [0.0, 0.4, 0.7][bar]
-                    let wave = 0.5 + 0.5 * sin((time * speed + phase) * 2 * .pi)
-                    Capsule()
-                        .fill(color)
-                        .frame(width: 2, height: 3 + 6 * wave)
-                }
-            }
-            .frame(height: 10)
+    func makeNSView(context: Context) -> EqualizerView { EqualizerView() }
+
+    func updateNSView(_ view: EqualizerView, context: Context) {
+        view.color = NSColor(color).cgColor
+    }
+}
+
+final class EqualizerView: NSView {
+    /// Each bar: cycles per second and where in its cycle it starts.
+    private static let bars: [(speed: Double, phase: Double)] = [(1.05, 0.0), (0.8, 0.4), (1.3, 0.7)]
+    private static let barWidth: CGFloat = 2
+    private static let spacing: CGFloat = 1.5
+    private static let low: CGFloat = 3
+    private static let high: CGFloat = 9
+
+    private let barLayers: [CALayer] = EqualizerView.bars.map { _ in CALayer() }
+
+    var color: CGColor = NSColor.white.cgColor {
+        didSet {
+            guard color != oldValue else { return }
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            for bar in barLayers { bar.backgroundColor = color }
+            CATransaction.commit()
+        }
+    }
+
+    override init(frame: NSRect) {
+        super.init(frame: frame)
+        wantsLayer = true
+        for bar in barLayers {
+            bar.cornerRadius = Self.barWidth / 2
+            bar.backgroundColor = color
+            layer?.addSublayer(bar)
+        }
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
+    override var intrinsicContentSize: NSSize {
+        let count = CGFloat(Self.bars.count)
+        return NSSize(width: count * Self.barWidth + (count - 1) * Self.spacing, height: 10)
+    }
+
+    override func layout() {
+        super.layout()
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        let total = intrinsicContentSize.width
+        var x = (bounds.width - total) / 2
+        for bar in barLayers {
+            bar.bounds = CGRect(x: 0, y: 0, width: Self.barWidth, height: Self.low)
+            bar.position = CGPoint(x: x + Self.barWidth / 2, y: bounds.midY)
+            x += Self.barWidth + Self.spacing
+        }
+        CATransaction.commit()
+        startIfNeeded()
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        startIfNeeded()
+    }
+
+    /// The same wave as before: height = 3 + 6 × (0.5 + 0.5 · sin(2π · (t · speed + phase))).
+    /// Low to high and back with a sine-shaped ease is that sine.
+    private func startIfNeeded() {
+        guard window != nil else { return }
+        for (bar, spec) in zip(barLayers, Self.bars) where bar.animation(forKey: "wave") == nil {
+            let period = 1 / spec.speed
+            let wave = CABasicAnimation(keyPath: "bounds.size.height")
+            wave.fromValue = Self.low
+            wave.toValue = Self.high
+            wave.duration = period / 2
+            wave.autoreverses = true
+            wave.repeatCount = .infinity
+            wave.timingFunction = CAMediaTimingFunction(controlPoints: 0.37, 0, 0.63, 1)
+            // The sine is lowest a quarter cycle before its phase starts.
+            wave.timeOffset = ((spec.phase + 0.25).truncatingRemainder(dividingBy: 1)) * period
+            wave.isRemovedOnCompletion = false
+            bar.add(wave, forKey: "wave")
         }
     }
 }

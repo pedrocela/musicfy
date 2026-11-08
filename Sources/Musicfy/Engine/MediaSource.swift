@@ -77,14 +77,17 @@ final class MusicSource: MediaSource {
         return self.runner.compiles(probe("favorited")) ? "favorited" : "loved"
     }()
 
-    private var stateScript: String {
+    /// Every property read is a round trip to Music, so each one is read once and kept
+    /// in a variable (this runs every couple of seconds).
+    private lazy var stateScript: String = {
         """
         if application id "com.apple.Music" is not running then return {"stopped"}
         tell application id "com.apple.Music"
+        \tset mfPs to player state
         \tset mfSt to "stopped"
-        \tif player state is playing or player state is fast forwarding or player state is rewinding then
+        \tif mfPs is playing or mfPs is fast forwarding or mfPs is rewinding then
         \t\tset mfSt to "playing"
-        \telse if player state is paused then
+        \telse if mfPs is paused then
         \t\tset mfSt to "paused"
         \tend if
         \tif mfSt is "stopped" then return {"stopped"}
@@ -112,16 +115,17 @@ final class MusicSource: MediaSource {
         \ttry
         \t\tset mfPos to player position
         \tend try
+        \tset mfSr to song repeat
         \tset mfRp to "off"
-        \tif song repeat is all then
+        \tif mfSr is all then
         \t\tset mfRp to "all"
-        \telse if song repeat is one then
+        \telse if mfSr is one then
         \t\tset mfRp to "one"
         \tend if
         \treturn {mfSt, mfNm, mfAr, mfAl, mfDu, mfPos, mfTid, sound volume, shuffle enabled, mfRp, mfFav, ""}
         end tell
         """
-    }
+    }()
 
     private let artworkScript = """
         if application id "com.apple.Music" is not running then return missing value
@@ -137,15 +141,14 @@ final class MusicSource: MediaSource {
         """
 
     func fetchState() -> Result<PlayerState?, AppleScriptRunner.Failure> {
-        guard kind.isInstalled, kind.isRunning else { return .success(nil) }
+        guard kind.isRunning else { return .success(nil) }
         return runner.run(stateScript).map { parse($0) }
     }
 
     func fetchEmbeddedArtwork() -> NSImage? {
         guard case .success(let desc) = runner.run(artworkScript) else { return nil }
-        let data = desc.data
-        guard !data.isEmpty else { return nil }
-        return NSImage(data: data)
+        // Decoded here, off the main thread, and scaled to what will be drawn.
+        return ArtworkLoader.decode(desc.data)
     }
 
     func playPause() { runner.fire(command("playpause")) }
@@ -229,10 +232,11 @@ final class SpotifySource: MediaSource {
     private let stateScript = """
         if application id "com.spotify.client" is not running then return {"stopped"}
         tell application id "com.spotify.client"
+        \tset mfPs to player state
         \tset mfSt to "stopped"
-        \tif player state is playing then
+        \tif mfPs is playing then
         \t\tset mfSt to "playing"
-        \telse if player state is paused then
+        \telse if mfPs is paused then
         \t\tset mfSt to "paused"
         \tend if
         \tif mfSt is "stopped" then return {"stopped"}
@@ -262,7 +266,7 @@ final class SpotifySource: MediaSource {
         """
 
     func fetchState() -> Result<PlayerState?, AppleScriptRunner.Failure> {
-        guard kind.isInstalled, kind.isRunning else { return .success(nil) }
+        guard kind.isRunning else { return .success(nil) }
         return runner.run(stateScript).map { parse($0) }
     }
 

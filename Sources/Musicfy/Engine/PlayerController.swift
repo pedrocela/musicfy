@@ -10,14 +10,19 @@ final class PlayerController: ObservableObject {
         let kind: SourceProblem
     }
 
-    @Published private(set) var state: PlayerState?
+    @Published private(set) var state: PlayerState? {
+        didSet { syncClock() }
+    }
     /// When `state.position` was read; the live position is interpolated from here.
-    @Published private(set) var positionDate = Date()
+    @Published private(set) var positionDate = Date() {
+        didSet { syncClock() }
+    }
+    /// Ticks for the time labels and the lyrics, only while it's worth it.
+    let clock = PlaybackClock()
     @Published private(set) var artwork: NSImage? {
         didSet {
             artworkToken &+= 1
-            palette = artwork.map(ArtworkPalette.from) ?? .neutral
-            makeGlass()
+            makeLook()
         }
     }
     /// Artwork mode's glass, made from the current artwork. `nil` while computing.
@@ -36,7 +41,10 @@ final class PlayerController: ObservableObject {
         didSet { if queueVisible { loadQueue() } }
     }
     @Published var lyricsVisible = false {
-        didSet { if lyricsVisible, let state { loadLyrics(for: state) } }
+        didSet {
+            if lyricsVisible, let state { loadLyrics(for: state) }
+            if lyricsVisible != oldValue { syncClock() }
+        }
     }
 
     let settings: Settings
@@ -48,7 +56,17 @@ final class PlayerController: ObservableObject {
     private var lastStates: [SourceKind: PlayerState] = [:]
     private var startedAt: [SourceKind: Date] = [:]
     private var timer: Timer?
+    /// The player window is on screen. Hidden, there's nothing to keep up to date as often.
+    var panelVisible = true {
+        didSet {
+            guard panelVisible != oldValue else { return }
+            scheduleTimer()
+            syncClock()
+            if panelVisible { refresh() }
+        }
+    }
     private var refreshing = false
+    private var lastFullRead = Date.distantPast
     /// After play or pause, what the button promised and until when. The apps take a moment
     /// to start or stop (Music buffers), and a read in between still reports the old state:
     /// trusting it made the icon flip back and forth.
@@ -85,26 +103,53 @@ final class PlayerController: ObservableObject {
         let workspace = NSWorkspace.shared.notificationCenter
         for name in [NSWorkspace.didLaunchApplicationNotification, NSWorkspace.didTerminateApplicationNotification] {
             observers.append(workspace.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                SourceKind.forgetInstalled()
                 Task { @MainActor in self?.refreshSoon(0.5) }
             })
         }
-        let timer = Timer(timeInterval: 1.5, repeats: true) { [weak self] _ in
-            Task { @MainActor in self?.refresh() }
-        }
-        timer.tolerance = 0.3
-        RunLoop.main.add(timer, forMode: .common)
-        self.timer = timer
+        scheduleTimer()
         refresh()
     }
 
-    func refresh() {
+    /// How often the apps are read. Both post a notification when they play, pause or change
+    /// song, so reading is only for what they don't announce (the position after a seek,
+    /// volume, shuffle). Playing and on screen: every 1.5 s. Paused, closed or hidden:
+    /// every 4 s, which saves most of the Apple Events without anyone noticing.
+    private var pollInterval: TimeInterval {
+        let playing = lastStates.values.contains(where: \.isPlaying)
+        return playing && panelVisible ? 1.5 : 4
+    }
+
+    private func scheduleTimer() {
+        let interval = pollInterval
+        if let timer, timer.isValid, timer.timeInterval == interval { return }
+        timer?.invalidate()
+        let timer = Timer(timeInterval: interval, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.refresh(onlyRelevant: true) }
+        }
+        timer.tolerance = interval * 0.2
+        RunLoop.main.add(timer, forMode: .common)
+        self.timer = timer
+    }
+
+    /// `onlyRelevant` (the timer): read just the app on screen and any that's playing. The
+    /// other one announces it if it starts playing; it's read in full every 20 s anyway.
+    /// Every read is a round trip that also wakes the app being asked.
+    func refresh(onlyRelevant: Bool = false) {
         if refreshing {
             refreshAgain = true
             return
         }
         refreshing = true
         let startedGeneration = generation
-        let sources = self.sources
+        var sources = self.sources
+        if onlyRelevant, Date().timeIntervalSince(lastFullRead) < 20 {
+            sources = sources.filter { kind, _ in
+                kind == state?.source || lastStates[kind]?.isPlaying == true
+            }
+        } else {
+            lastFullRead = Date()
+        }
         AppleScriptRunner.shared.queue.async {
             var results: [SourceKind: Result<PlayerState?, AppleScriptRunner.Failure>] = [:]
             for (kind, source) in sources {
@@ -155,6 +200,7 @@ final class PlayerController: ObservableObject {
         }
         if newProblem != problem { problem = newProblem }
         chooseActive()
+        scheduleTimer()
     }
 
     /// Automatic: the last one that started playing. If nothing plays, keep the current one.
@@ -189,12 +235,29 @@ final class PlayerController: ObservableObject {
         if queueVisible, trackChanged { loadQueue() }
     }
 
+    private func syncClock() {
+        clock.sync(running: panelVisible && state?.isPlaying == true, fine: lyricsVisible, position: position())
+    }
+
     /// Interpolated position: the script is read every 1.5 s but the bar moves smoothly.
     func position(at date: Date = Date()) -> Double {
         guard let state else { return 0 }
         let elapsed = state.isPlaying ? date.timeIntervalSince(positionDate) : 0
         let value = state.position + elapsed
         return state.duration > 0 ? min(value, state.duration) : value
+    }
+
+    /// The song's progress (0 to 1) right now.
+    func progressFraction(at date: Date = Date()) -> Double {
+        guard let duration = state?.duration, duration > 0 else { return 0 }
+        return min(1, position(at: date) / duration)
+    }
+
+    /// How much of the song goes by per second: 0 when paused. Core Animation moves the
+    /// bar and the ring at this speed between readings.
+    var progressRate: Double {
+        guard let state, state.isPlaying, state.duration > 0 else { return 0 }
+        return 1 / state.duration
     }
 
     // MARK: - Artwork and lyrics
@@ -380,18 +443,30 @@ final class PlayerController: ObservableObject {
 
     // MARK: - Apps
 
-    private func makeGlass() {
+    /// The colors and the glass come from the artwork. Both are worked out off the main
+    /// thread (the colors first: they're ready in a millisecond, the glass takes longer).
+    private func makeLook() {
         glass = nil
-        guard let image = artwork else { return }
+        guard let image = artwork else {
+            palette = .neutral
+            return
+        }
         let token = artworkToken
-        Task {
-            let glass = await withCheckedContinuation { continuation in
-                DispatchQueue.global(qos: .userInitiated).async {
-                    continuation.resume(returning: ArtworkGlass.make(from: image))
+        DispatchQueue.global(qos: .userInitiated).async {
+            let palette = ArtworkPalette.from(image)
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    guard self.artworkToken == token else { return }
+                    if palette != self.palette { self.palette = palette }
                 }
             }
-            guard self.artworkToken == token else { return }
-            self.glass = glass
+            let glass = ArtworkGlass.make(from: image)
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    guard self.artworkToken == token else { return }
+                    self.glass = glass
+                }
+            }
         }
     }
 
