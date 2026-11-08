@@ -5,14 +5,15 @@ enum IdleBehavior: String, CaseIterable {
     case stay
     /// Hides after 30 s without music and comes back when something plays.
     case hide
-    /// Shrinks to compact and returns to artwork when music starts.
-    case compact
+    /// Keeps its mode and size, and fades to half opacity after a while paused.
+    /// Full opacity again on hover or when music starts.
+    case fade
 
     var label: String {
         switch self {
         case .stay: return "Stay Visible"
         case .hide: return "Hide Automatically"
-        case .compact: return "Shrink to Compact"
+        case .fade: return "Fade When Paused"
         }
     }
 }
@@ -40,7 +41,7 @@ final class Settings: ObservableObject {
             "showOutput": true,
             "showLyricsButton": true,
             "showQueueButton": true,
-            "idleBehavior": IdleBehavior.compact.rawValue,
+            "idleBehavior": IdleBehavior.fade.rawValue,
             "showOverFullScreen": false,
         ])
         mode = DisplayMode(rawValue: defaults.string(forKey: "mode") ?? "") ?? .artwork
@@ -49,7 +50,9 @@ final class Settings: ObservableObject {
         showOutput = defaults.bool(forKey: "showOutput")
         showLyricsButton = defaults.bool(forKey: "showLyricsButton")
         showQueueButton = defaults.bool(forKey: "showQueueButton")
-        idleBehavior = IdleBehavior(rawValue: defaults.string(forKey: "idleBehavior") ?? "") ?? .compact
+        // "compact" was the old "Shrink When Paused": it now fades instead.
+        let storedIdle = defaults.string(forKey: "idleBehavior")
+        idleBehavior = storedIdle == "compact" ? .fade : IdleBehavior(rawValue: storedIdle ?? "") ?? .fade
         showOverFullScreen = defaults.bool(forKey: "showOverFullScreen")
     }
 }

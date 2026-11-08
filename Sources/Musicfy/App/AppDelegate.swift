@@ -34,8 +34,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var idleWork: DispatchWorkItem?
     private var islandCollapseWork: DispatchWorkItem?
     private var islandHoverSince: Date?
-    /// Artwork switched to compact because nothing is playing (not because the user chose it).
-    private var idleCompact = false
+    /// Paused long enough to fade (`IdleBehavior.fade`); hover brings it back to full.
+    private var pausedFaded = false
+    /// The mouse is over the player (or the Island's pill).
+    private var pointerOver = false
+    /// Fading out to hide: the resting opacity must not bring it back meanwhile.
+    private var leaving = false
     /// Hid itself; comes back when something plays.
     private var autoHidden = false
     /// Out of the way of a full-screen video or app; back when it leaves full screen.
@@ -48,8 +52,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var fullScreenPoll: Timer?
     private var menuOpen = false
     private var applyingFrame = false
-    /// The user picked a mode while paused: don't auto-shrink again until something plays.
-    private var userOverrodeIdle = false
     // Morph to or from the Island.
     private var transitionGeneration = 0
     private var morphTarget: DisplayMode?
@@ -173,7 +175,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in
                 guard let self else { return }
-                self.idleCompact = false
                 self.updateMode(animated: true)
                 self.evaluateIdle()
             }
@@ -184,8 +185,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in
                 guard let self else { return }
-                self.idleCompact = false
-                self.updateMode(animated: true)
+                self.pausedFaded = false
+                self.applyRestingAlpha()
                 self.evaluateIdle()
             }
             .store(in: &cancellables)
@@ -202,12 +203,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                 if self.panelModel.mode != .island, !self.transitioning {
                     self.animateFrame(to: self.framedRect(for: self.panelModel.mode))
                 }
-                // With a panel open the artwork doesn't shrink; once it closes, it does (if still paused).
-                self.evaluateIdle()
             }
             .store(in: &cancellables)
 
-        // Play / pause: decide whether to shrink, hide or come back.
+        // Play / pause: decide whether to fade, hide or come back.
         player.$state
             .map { $0?.isPlaying ?? false }
             .removeDuplicates()
@@ -225,10 +224,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         idleWork = nil
 
         if isPlaying {
-            userOverrodeIdle = false
-            if idleCompact {
-                idleCompact = false
-                updateMode(animated: true)
+            if pausedFaded {
+                pausedFaded = false
+                applyRestingAlpha()
             }
             if autoHidden {
                 autoHidden = false
@@ -241,11 +239,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         switch settings.idleBehavior {
         case .stay:
             return
-        case .compact:
-            // The mini artwork is already as small as it gets: it stays.
-            guard settings.mode == .artwork, !idleCompact, !userOverrodeIdle, panelModel.drawer == .none,
-                  panelModel.artworkSide >= Theme.artworkMiniBreak else { return }
-            delay = 1.5
+        case .fade:
+            guard !pausedFaded else { return }
+            delay = Theme.pausedFadeDelay
         case .hide:
             guard isPanelVisible else { return }
             delay = 30
@@ -259,6 +255,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     private func idleTimerFired() {
         guard !isPlaying else { return }
+        if settings.idleBehavior == .fade {
+            // Under the mouse it stays at full opacity and fades once the mouse leaves.
+            pausedFaded = true
+            applyRestingAlpha()
+            return
+        }
         // Never change the window under the mouse: wait for it to leave.
         if panelModel.isHovering || panelModel.islandExpanded || menuOpen || transitioning {
             let work = DispatchWorkItem { [weak self] in
@@ -269,13 +271,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             return
         }
         switch settings.idleBehavior {
-        case .stay:
+        case .stay, .fade:
             break
-        case .compact:
-            if settings.mode == .artwork, panelModel.mode == .artwork, panelModel.drawer == .none, !userOverrodeIdle {
-                idleCompact = true
-                updateMode(animated: true)
-            }
         case .hide:
             autoHidden = true
             hidePanel(manual: false)
@@ -284,14 +281,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     // MARK: - Mode and size
 
-    private var targetMode: DisplayMode {
-        idleCompact && settings.mode == .artwork ? .compact : settings.mode
+    private var targetMode: DisplayMode { settings.mode }
+
+    // MARK: - Resting opacity
+
+    /// Half opacity once paused a while, unless the mouse is on it or its menu is open.
+    private var restingAlpha: CGFloat {
+        pausedFaded && !pointerOver && !menuOpen ? Theme.pausedAlpha : 1
+    }
+
+    /// Eases the window to its resting opacity. Leaves it alone while it's hiding or morphing.
+    private func applyRestingAlpha() {
+        guard let panel, panel.isShown, !leaving, !transitioning else { return }
+        let alpha = restingAlpha
+        guard abs(panel.alphaValue - alpha) > 0.01 else { return }
+        fade(to: alpha, duration: alpha < 1 ? 0.6 : 0.2)
     }
 
     /// A mode change asked for by the user (menu, double click, a gesture).
     func userSwitch(to mode: DisplayMode) {
-        if !isPlaying { userOverrodeIdle = true }
-        idleCompact = false
         if settings.mode != mode { settings.mode = mode } // the observer runs again later; it's a no-op by then
         updateMode(animated: true)
     }
@@ -367,7 +375,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         islandCollapseWork = nil
         panel.hasShadow = false
         panel.ignoresMouseEvents = false
-        panel.alphaValue = 1
+        leaving = false
+        panel.alphaValue = restingAlpha
 
         let still = Transaction(animation: nil)
 
@@ -419,6 +428,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                         withAnimation(.easeOut(duration: 0.2)) { self.panelModel.morph = nil }
                         self.panel.hasShadow = true
                         self.panel.invalidateShadow()
+                        self.applyRestingAlpha()
                     }
                 }
             }
@@ -1137,6 +1147,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         if panelModel.mode == .island {
             let inside = islandPillRect().insetBy(dx: -2, dy: -2).contains(mouse)
             panel.ignoresMouseEvents = !inside
+            setPointerOver(inside)
             if inside {
                 islandCollapseWork?.cancel()
                 islandCollapseWork = nil
@@ -1165,6 +1176,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
 
         let inside = panel.frame.contains(mouse)
+        setPointerOver(inside)
         if inside { grip.refreshCursor(atScreenPoint: mouse) }
         if inside {
             hoverExitWork?.cancel()
@@ -1186,6 +1198,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     // MARK: - Show and hide
 
+    private func setPointerOver(_ over: Bool) {
+        guard over != pointerOver else { return }
+        pointerOver = over
+        applyRestingAlpha()
+    }
+
     func showPanel() {
         autoHidden = false
         guard !panel.isShown else { return }
@@ -1197,9 +1215,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             return
         }
         placePanel(for: panelModel.mode)
+        leaving = false
         panel.alphaValue = 0
         panel.orderFrontRegardless()
-        fade(to: 1, duration: 0.25)
+        fade(to: restingAlpha, duration: 0.25)
         player.panelVisible = true
         wakeMousePolling()
         evaluateIdle()
@@ -1211,6 +1230,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             hiddenForFullScreen = false
         }
         guard panel.isShown else { return }
+        leaving = true
         panelModel.isHovering = false
         panelModel.islandExpanded = false
         panelModel.volumeOpen = false
@@ -1263,6 +1283,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         if verdict.stepAside, panel.isShown {
             hiddenForFullScreen = true
             hiddenForApp = verdict.app?.processIdentifier
+            leaving = true
             panelModel.isHovering = false
             panelModel.islandExpanded = false
             panelModel.volumeOpen = false
@@ -1347,8 +1368,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     private func popUp(_ menu: NSMenu) {
         menuOpen = true
+        applyRestingAlpha()
         menu.popUp(positioning: nil, at: NSEvent.mouseLocation, in: nil)
         menuOpen = false
+        applyRestingAlpha()
         wakeMousePolling()
     }
 

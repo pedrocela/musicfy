@@ -34,8 +34,8 @@ on "Show Over Videos"). It shows whatever is playing in either app.
 - After clicking the player: **Space** plays or pauses, **⌘←** and **⌘→** skip to the previous or next song.
 - **⌥⌘M** from any app: show or hide the player.
 - The **app glyph** (Music's pink note or Spotify's green disc) shows which app is playing; click it to bring that app to the front.
-- When nothing plays, artwork shrinks to compact and comes back when music starts
-  (turn it off with "Shrink When Paused").
+- Paused, it keeps its mode and size; after 10 s it fades to half opacity, and comes
+  back to full on hover or when music starts (turn it off with "Fade When Paused").
 
 At the top: synced **lyrics** (from [LRCLIB](https://lrclib.net)), **Up Next**, the app's
 **volume** and the Mac's **audio output**. Choose which ones show in "Show Buttons".

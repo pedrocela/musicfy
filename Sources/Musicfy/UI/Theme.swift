@@ -180,6 +180,9 @@ enum Theme {
     static let islandContentIn = Animation.easeOut(duration: 0.16).delay(0.04)
     /// How long the controls stay after the mouse leaves.
     static let hoverExitDelay: TimeInterval = 0.3
+    /// Paused this long, the player fades to `pausedAlpha` (full again on hover).
+    static let pausedFadeDelay: TimeInterval = 10
+    static let pausedAlpha: CGFloat = 0.5
 }
 
 // MARK: - Artwork mode sizes
