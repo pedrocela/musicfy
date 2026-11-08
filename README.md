@@ -42,13 +42,35 @@ At the top: synced **lyrics** (from [LRCLIB](https://lrclib.net)), **Up Next**, 
 
 ## Install
 
-Requires macOS 14 or later and the Xcode command line tools (`xcode-select --install`).
+Requires macOS 14 (Sonoma) or later, on Apple silicon or Intel.
+
+### Download (no tools needed)
+
+1. Download **[Musicfy.zip](https://github.com/pedrocela/musicfy/releases/latest/download/Musicfy.zip)**
+   and double-click it to unzip.
+2. Drag **Musicfy** into **Applications**.
+3. Musicfy isn't signed with an Apple developer account, so macOS blocks it the first
+   time. Open **Terminal** and paste this line, then press Return:
+
+   ```bash
+   xattr -dr com.apple.quarantine /Applications/Musicfy.app
+   ```
+
+   (Without Terminal: open Musicfy once, close the warning, then go to System Settings →
+   Privacy & Security, scroll down and click **Open Anyway**.)
+4. Open Musicfy from Applications. It lives in the menu bar, not in the Dock.
+
+### Build it yourself
+
+Needs the Xcode command line tools (`xcode-select --install`).
 
 ```bash
 git clone https://github.com/pedrocela/musicfy.git
 cd musicfy
 ./build.sh --install
 ```
+
+### First run
 
 The first time, macOS asks whether Musicfy may control Music and Spotify: allow it.
 If it was denied by mistake: System Settings → Privacy & Security → Automation → Musicfy.

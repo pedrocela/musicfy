@@ -7,17 +7,35 @@ on:
 jobs:
   build:
     runs-on: macos-15
+    permissions:
+      contents: write # to publish the release from main
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0 # the build number is the commit count
       - name: Test
         run: swift test
-      - name: Build
-        run: ./build.sh
+      - name: Build universal (Apple silicon and Intel)
+        run: ARCHS="arm64 x86_64" ./build.sh
+      - name: Check architectures
+        run: lipo -info build/Musicfy.app/Contents/MacOS/Musicfy
       - name: Package
         run: ditto -c -k --keepParent build/Musicfy.app build/Musicfy.zip
       - uses: actions/upload-artifact@v4
         with:
           name: Musicfy
           path: build/Musicfy.zip
+      # Every push to main becomes the latest release, so the download link in the
+      # README always gives the current build:
+      # https://github.com/pedrocela/musicfy/releases/latest/download/Musicfy.zip
+      - name: Release
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          N="$(git rev-list --count HEAD)"
+          V="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' Resources/Info.plist)"
+          gh release create "build-$N" build/Musicfy.zip \
+            --title "Musicfy $V (build $N)" \
+            --notes "Built from $(git rev-parse --short HEAD). Install steps: see the README." \
+            --target "$GITHUB_SHA" --latest
