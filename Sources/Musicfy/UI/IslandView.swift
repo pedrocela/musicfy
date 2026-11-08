@@ -73,7 +73,20 @@ struct IslandView: View {
 
     // MARK: Closed
 
+    @ViewBuilder
     private var collapsedContent: some View {
+        if player.state == nil {
+            EmptyIslandRow(player: player)
+                .opacity(settled ? 1 : 0)
+                .padding(.leading, Theme.islandThumbInset)
+                .padding(.trailing, 12)
+                .frame(width: Theme.islandCollapsed.width, height: Theme.islandCollapsed.height)
+        } else {
+            playingRow
+        }
+    }
+
+    private var playingRow: some View {
         HStack(spacing: 10) {
             thumbnail(side: Theme.islandThumb, radius: Theme.islandThumbRadius)
                 .saturation(playing ? 1 : 0.35)
@@ -131,7 +144,7 @@ struct IslandView: View {
     private var expandedContent: some View {
         VStack(spacing: 0) {
             if player.state == nil {
-                EmptyStateView(player: player, backdrop: false)
+                EmptyStateView(player: player, placement: .island)
                     .frame(maxHeight: .infinity)
             } else {
                 HStack(alignment: .top, spacing: 12) {

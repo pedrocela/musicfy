@@ -640,72 +640,89 @@ private struct SyncedLyrics: View, Equatable {
 
 // MARK: - Nothing playing and permissions
 
-/// What the player shows when neither app has a song loaded: a dark backdrop lit faintly
-/// by each installed app's color, an empty artwork, and a way into each app. It lays itself
-/// out for the space it gets: stacked in artwork, side by side in compact and the open
-/// Island, and just the empty artwork and the app glyphs in the mini artwork.
+/// What the player shows when neither app has a song loaded. It keeps the player's own
+/// layout so it reads as the same object, just empty:
+/// - Artwork: an empty cover fills the window; the title sits where the song's would and
+///   the app buttons where the transport goes.
+/// - Compact: the empty cover as the thumbnail, text and buttons beside it.
+/// - Island (open): like the open Island while playing, with the buttons in place of the
+///   transport. The closed Island draws its own (`EmptyIslandRow`).
+/// - Mini artwork: the cover and the app glyphs only.
 /// Nothing in it animates while it sits there, so an idle player costs nothing.
 struct EmptyStateView: View {
-    @ObservedObject var player: PlayerController
-    /// Its own backdrop; the Island already has one.
-    var backdrop = true
-    @State private var appeared = false
+    enum Placement { case panel, island }
 
-    private enum Layout { case stacked, wide, mini }
+    @ObservedObject var player: PlayerController
+    var placement: Placement = .panel
+    @State private var appeared = false
 
     var body: some View {
         GeometryReader { geo in
-            let layout = layout(for: geo.size)
-            ZStack {
-                if backdrop { EmptyBackdrop(sources: player.installedSources) }
-                switch layout {
-                case .stacked: stacked(side: min(geo.size.width, geo.size.height))
-                case .wide: wide
-                case .mini: mini(side: min(geo.size.width, geo.size.height))
+            let size = geo.size
+            Group {
+                if placement == .island {
+                    island
+                } else if size.width < Theme.artworkMiniBreak {
+                    mini(side: min(size.width, size.height))
+                } else if size.height >= 200 {
+                    artwork(side: size.width)
+                } else {
+                    compact
                 }
             }
-            .frame(width: geo.size.width, height: geo.size.height)
+            .frame(width: size.width, height: size.height)
         }
+        .opacity(appeared ? 1 : 0)
         .onAppear {
-            withAnimation(Theme.smooth.delay(0.05)) { appeared = true }
+            withAnimation(Theme.fade) { appeared = true }
         }
-    }
-
-    private func layout(for size: CGSize) -> Layout {
-        if size.width < 200 { return .mini }
-        return size.height >= 220 ? .stacked : .wide
     }
 
     // MARK: Layouts
 
-    private func stacked(side: CGFloat) -> some View {
-        let art = min(96, side * 0.28)
-        return VStack(spacing: 0) {
-            EmptyArtwork(side: art)
-                .scaleEffect(appeared ? 1 : 0.92)
-                .opacity(appeared ? 1 : 0)
-            VStack(spacing: 4) {
+    private func artwork(side: CGFloat) -> some View {
+        let m = ArtworkMetrics(side: side)
+        return ZStack {
+            EmptyCover(sources: player.installedSources, noteScale: 0.30, noteOpacity: 0.16, noteLift: 0.08)
+            // The same veil the controls sit on.
+            LinearGradient(
+                stops: [
+                    .init(color: .black.opacity(0), location: 0.40),
+                    .init(color: .black.opacity(0.18), location: 0.66),
+                    .init(color: .black.opacity(0.42), location: 1),
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .allowsHitTesting(false)
+            VStack(alignment: .leading, spacing: 0) {
+                Spacer(minLength: 0)
                 Text("Nothing Playing")
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.system(size: m.title, weight: .semibold))
                     .foregroundStyle(Theme.primary)
                 Text(detail)
-                    .font(.system(size: 12))
+                    .font(.system(size: m.artist))
                     .foregroundStyle(Theme.secondary)
-                    .multilineTextAlignment(.center)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                    .padding(.top, 1)
+                buttons(height: m.capsuleHeight, fill: true)
+                    .padding(.top, 14 * m.ratio)
             }
-            .padding(.top, 16)
-            buttons
-                .padding(.top, 16)
+            .padding(.horizontal, m.sideMargin)
+            .padding(.bottom, m.bottomMargin + 4)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .shadow(color: .black.opacity(0.16), radius: 5, y: 1)
         }
-        .padding(.horizontal, 20)
-        .offset(y: appeared ? 0 : 6)
     }
 
-    private var wide: some View {
-        HStack(spacing: 16) {
-            EmptyArtwork(side: 72)
-                .scaleEffect(appeared ? 1 : 0.92)
-                .opacity(appeared ? 1 : 0)
+    private var compact: some View {
+        HStack(spacing: 14) {
+            EmptyCover(sources: player.installedSources)
+                .frame(width: 72, height: 72)
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color.white.opacity(0.12), lineWidth: 0.5))
+                .shadow(color: .black.opacity(0.3), radius: 8, y: 4)
             VStack(alignment: .leading, spacing: 0) {
                 Text("Nothing Playing")
                     .font(Theme.compactTitle)
@@ -716,156 +733,209 @@ struct EmptyStateView: View {
                     .lineLimit(1)
                     .minimumScaleFactor(0.85)
                     .padding(.top, 2)
-                buttons
+                buttons(height: 28, fill: false)
                     .padding(.top, 10)
             }
             Spacer(minLength: 0)
         }
         .padding(.horizontal, 16)
-        .offset(y: appeared ? 0 : 4)
+    }
+
+    /// Same frame as the open Island while playing: thumbnail and text up top, then one
+    /// row where the progress bar and transport would be.
+    private var island: some View {
+        VStack(spacing: 0) {
+            HStack(alignment: .center, spacing: 12) {
+                EmptyCover(sources: player.installedSources)
+                    .frame(width: 56, height: 56)
+                    .clipShape(RoundedRectangle(cornerRadius: Theme.islandThumbRadius, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: Theme.islandThumbRadius, style: .continuous)
+                            .strokeBorder(Color.white.opacity(0.1), lineWidth: 0.5)
+                    )
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Nothing Playing")
+                        .font(Theme.islandOpenTitle)
+                        .foregroundStyle(Theme.primary)
+                    Text(detail)
+                        .font(Theme.compactSubtitle)
+                        .foregroundStyle(Theme.secondary)
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 0)
+            }
+            Spacer(minLength: 0)
+            buttons(height: 34, fill: true)
+                .padding(.bottom, 6)
+        }
     }
 
     private func mini(side: CGFloat) -> some View {
-        VStack(spacing: side * 0.08) {
-            EmptyArtwork(side: side * 0.4)
-            HStack(spacing: 6) {
-                ForEach(player.installedSources) { kind in
-                    SourceButton(kind: kind, compact: true) { player.open(kind) }
+        ZStack {
+            EmptyCover(sources: player.installedSources, noteScale: 0.34, noteOpacity: 0.3, noteLift: 0.12)
+            VStack {
+                Spacer(minLength: 0)
+                HStack(spacing: 6) {
+                    ForEach(player.installedSources) { kind in
+                        SourceButton(kind: kind, style: .glyph) { player.open(kind) }
+                    }
                 }
+                .padding(.bottom, max(8, side * 0.08))
             }
         }
-        .opacity(appeared ? 1 : 0)
     }
 
-    private var buttons: some View {
+    /// One glass button per installed app. `fill`: they share the row's width.
+    private func buttons(height: CGFloat, fill: Bool) -> some View {
         HStack(spacing: 8) {
             ForEach(player.installedSources) { kind in
-                SourceButton(kind: kind, compact: false) { player.open(kind) }
+                SourceButton(kind: kind, style: .label(height: height, fill: fill)) { player.open(kind) }
             }
         }
     }
 
-    private var detail: String {
-        let names = player.installedSources.map(\.displayName)
+    private var detail: String { EmptyStateView.detail(for: player.installedSources) }
+
+    static func detail(for sources: [SourceKind]) -> String {
+        let names = sources.map(\.displayName)
         let list = names.count > 1 ? names.dropLast().joined(separator: ", ") + " or " + names.last! : names.first ?? "Music"
-        if player.installedSources.contains(where: \.isRunning) { return "Play something in \(list)." }
+        if sources.contains(where: \.isRunning) { return "Play something in \(list)." }
         return names.count > 1 ? "\(names.joined(separator: " and ")) are closed." : "\(list) is closed."
     }
 }
 
-/// Graphite, darker toward the bottom, with each installed app's color glowing faintly
-/// from a corner: Music's pink from the top left, Spotify's green from the bottom right.
-/// Opaque enough that a white desktop behind doesn't turn it gray.
-private struct EmptyBackdrop: View {
-    let sources: [SourceKind]
+/// The closed Island with nothing loaded: the empty cover, the title and why, and the
+/// glyphs of the apps it can open where the progress ring goes.
+struct EmptyIslandRow: View {
+    @ObservedObject var player: PlayerController
 
     var body: some View {
-        ZStack {
-            LinearGradient(
-                colors: [Color(red: 0.15, green: 0.15, blue: 0.17), Color(red: 0.07, green: 0.07, blue: 0.08)],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .opacity(0.94)
-            GeometryReader { geo in
-                let reach = max(geo.size.width, geo.size.height) * 0.75
-                ZStack {
-                    if sources.contains(.music) {
-                        RadialGradient(
-                            colors: [Theme.sourceColor(.music).opacity(0.22), .clear],
-                            center: .topLeading, startRadius: 0, endRadius: reach
-                        )
-                    }
-                    if sources.contains(.spotify) {
-                        RadialGradient(
-                            colors: [Theme.sourceColor(.spotify).opacity(0.13), .clear],
-                            center: .bottomTrailing, startRadius: 0, endRadius: reach
-                        )
-                    }
+        HStack(spacing: 10) {
+            EmptyCover(sources: player.installedSources)
+                .frame(width: Theme.islandThumb, height: Theme.islandThumb)
+                .clipShape(RoundedRectangle(cornerRadius: Theme.islandThumbRadius, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: Theme.islandThumbRadius, style: .continuous)
+                        .strokeBorder(Color.white.opacity(0.1), lineWidth: 0.5)
+                )
+            VStack(alignment: .leading, spacing: 0) {
+                Text("Nothing Playing")
+                    .font(Theme.islandTitle)
+                    .foregroundStyle(Theme.primary)
+                    .frame(height: 16)
+                Text(EmptyStateView.detail(for: player.installedSources))
+                    .font(Theme.islandSubtitle)
+                    .foregroundStyle(Color.white.opacity(0.55))
+                    .lineLimit(1)
+                    .frame(height: 14)
+            }
+            Spacer(minLength: 0)
+            HStack(spacing: 5) {
+                ForEach(player.installedSources) { kind in
+                    SourceGlyph(kind: kind, size: 11)
+                        .opacity(kind.isRunning ? 1 : 0.55)
                 }
             }
-            // A sheen along the top edge, like the glass elsewhere.
-            LinearGradient(colors: [Color.white.opacity(0.06), .clear], startPoint: .top, endPoint: .center)
         }
         .allowsHitTesting(false)
     }
 }
 
-/// An empty sleeve where the artwork goes: frosted, with a rim of light and a quiet note.
-private struct EmptyArtwork: View {
-    let side: CGFloat
+/// The cover of nothing: graphite, lit faintly from opposite corners by each installed
+/// app's color (Music's pink from the top left, Spotify's green from the bottom right),
+/// with a note in the middle. Fills whatever frame it gets; static.
+struct EmptyCover: View {
+    let sources: [SourceKind]
+    /// Note size relative to the shorter side, and how strongly it shows.
+    var noteScale: CGFloat = 0.42
+    var noteOpacity: Double = 0.55
+    /// How far above center the note sits, relative to the height (room for text below).
+    var noteLift: CGFloat = 0
 
     var body: some View {
-        let radius = max(6, side * 0.16)
-        let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
-        ZStack {
-            shape.fill(
+        GeometryReader { geo in
+            let side = min(geo.size.width, geo.size.height)
+            let reach = max(geo.size.width, geo.size.height) * 0.95
+            ZStack {
                 LinearGradient(
-                    colors: [Color.white.opacity(0.16), Color.white.opacity(0.05)],
+                    colors: [Color(red: 0.20, green: 0.20, blue: 0.23), Color(red: 0.08, green: 0.08, blue: 0.09)],
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
                 )
-            )
-            shape.strokeBorder(
-                LinearGradient(
-                    colors: [Color.white.opacity(0.30), Color.white.opacity(0.06)],
-                    startPoint: .top,
-                    endPoint: .bottom
-                ),
-                lineWidth: 0.75
-            )
-            Image(systemName: "music.note")
-                .font(.system(size: side * 0.36, weight: .medium))
-                .foregroundStyle(Color.white.opacity(0.5))
+                if sources.contains(.music) {
+                    RadialGradient(
+                        colors: [Theme.sourceColor(.music).opacity(0.30), .clear],
+                        center: .topLeading, startRadius: 0, endRadius: reach
+                    )
+                }
+                if sources.contains(.spotify) {
+                    RadialGradient(
+                        colors: [Theme.sourceColor(.spotify).opacity(0.18), .clear],
+                        center: .bottomTrailing, startRadius: 0, endRadius: reach
+                    )
+                }
+                LinearGradient(colors: [Color.white.opacity(0.07), .clear], startPoint: .top, endPoint: .center)
+                Image(systemName: "music.note")
+                    .font(.system(size: side * noteScale, weight: .medium))
+                    .foregroundStyle(Color.white.opacity(noteOpacity))
+                    .offset(y: -geo.size.height * noteLift)
+            }
+            .frame(width: geo.size.width, height: geo.size.height)
         }
-        .frame(width: side, height: side)
-        .shadow(color: .black.opacity(0.35), radius: side * 0.12, y: side * 0.06)
+        .allowsHitTesting(false)
     }
 }
 
-/// A glass capsule with the app's own glyph: "Music", "Spotify". In the mini artwork,
-/// just the glyph in a glass circle.
+/// A glass button with the app's own glyph. `.label`: glyph and name in a capsule (full
+/// width of its share of the row when `fill`). `.glyph`: the glyph alone in a glass circle.
 private struct SourceButton: View {
+    enum Style {
+        case label(height: CGFloat, fill: Bool)
+        case glyph
+    }
+
     let kind: SourceKind
-    let compact: Bool
+    let style: Style
     let action: () -> Void
     @State private var hovering = false
 
     var body: some View {
         Button(action: action) {
-            Group {
-                if compact {
-                    SourceGlyph(kind: kind, size: 13)
-                        .frame(width: 26, height: 26)
-                        .background(glass(Circle()))
-                        .contentShape(Circle())
-                } else {
-                    HStack(spacing: 7) {
-                        SourceGlyph(kind: kind, size: 13)
-                        Text(kind.displayName)
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(Theme.primary)
-                    }
-                    .padding(.leading, 10)
-                    .padding(.trailing, 13)
-                    .frame(height: 28)
-                    .background(glass(Capsule()))
-                    .contentShape(Capsule())
+            switch style {
+            case .glyph:
+                SourceGlyph(kind: kind, size: 13)
+                    .frame(width: 26, height: 26)
+                    .background(glass(Circle()))
+                    .contentShape(Circle())
+            case let .label(height, fill):
+                HStack(spacing: 7) {
+                    SourceGlyph(kind: kind, size: (height * 0.46).rounded())
+                    Text(kind.displayName)
+                        .font(.system(size: max(12, (height * 0.43).rounded()), weight: .semibold))
+                        .foregroundStyle(Theme.primary)
+                        .lineLimit(1)
                 }
+                .padding(.horizontal, 12)
+                .frame(maxWidth: fill ? .infinity : nil)
+                .frame(height: height)
+                .background(glass(Capsule()))
+                .contentShape(Capsule())
             }
         }
         .buttonStyle(PressableStyle())
-        .help("Open \(kind.displayName)")
+        .help(kind.isRunning ? "Show \(kind.displayName)" : "Open \(kind.displayName)")
         .onHover { hovering = $0 }
         .animation(Theme.fade, value: hovering)
     }
 
+    /// The same glass as the capsules over the artwork: a light veil, a rim brighter on top.
     private func glass<S: InsettableShape>(_ shape: S) -> some View {
-        shape.fill(Color.white.opacity(hovering ? 0.17 : 0.10))
+        shape.fill(Color.white.opacity(hovering ? 0.20 : 0.12))
+            .background(shape.fill(.ultraThinMaterial))
             .overlay(
                 shape.strokeBorder(
                     LinearGradient(
-                        colors: [Color.white.opacity(0.24), Color.white.opacity(0.05)],
+                        colors: [Color.white.opacity(0.30), Color.white.opacity(0.06)],
                         startPoint: .top,
                         endPoint: .bottom
                     ),
