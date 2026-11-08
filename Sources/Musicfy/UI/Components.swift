@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import os
 
 // MARK: - Translucent background
 
@@ -50,6 +51,9 @@ struct WindowDragArea: NSViewRepresentable {
         override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
         override func mouseDown(with event: NSEvent) {
+            // Tells a missed edge apart from one that never reached the window.
+            let point = event.locationInWindow
+            resizeLog.notice("drag-area down at \(Int(point.x), privacy: .public),\(Int(point.y), privacy: .public) in \(Int(self.window?.frame.width ?? 0), privacy: .public)x\(Int(self.window?.frame.height ?? 0), privacy: .public)")
             if event.clickCount == 2 {
                 onDoubleClick()
             } else {
