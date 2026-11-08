@@ -25,8 +25,8 @@ enum Theme {
     static var compactArtSide: CGFloat { compactSize.height - compactInset * 2 }
     static let compactArtRadius: CGFloat = 5
     static let islandCollapsed = CGSize(width: 300, height: 44)
-    /// The open Island is compact on hover: same size, same layout.
-    static let islandExpanded = compactSize
+    /// The open Island is compact on hover at its widest: same layout, 416 × 136.
+    static let islandExpanded = CGSize(width: compactWidthRange.upperBound, height: compactSize.height)
     /// One corner radius for every mode, the soft corner of an album cover (as Music
     /// rounds artwork), so artwork, compact and the Island read as one family: covers.
     static let cornerRadius: CGFloat = 6

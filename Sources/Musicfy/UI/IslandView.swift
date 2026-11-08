@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// Island mode: a 300 × 44 pill under the menu bar. Resting the mouse on it opens it
-/// downward into compact on hover (320 × 136), controls and all.
+/// downward into the widest compact (416 × 136), controls and all.
 ///
 /// The window is always the size of the open Island (plus room for the shadow); what
 /// animates is the pill inside. Clicks pass through the transparent part.
