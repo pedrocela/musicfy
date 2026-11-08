@@ -51,19 +51,21 @@ struct IslandView: View {
             // The shadow comes from a plain shape behind the pill (the tint above covers it).
             // A shadow of the pill itself is redrawn every time anything inside it moves.
             .background(
-                // Two layers, like a cover lifted off the desk: a soft one that stays inside the
-                // window's margin (a bigger blur got cut off at the window's edge and looked
-                // square), and a tight one that hugs the 6 pt corners.
+                // Soft like a macOS window's shadow: a wide haze on every side (top included),
+                // a closer layer for depth and a faint contact line around the 6 pt corners.
+                // All of it fits inside the window's margins (Theme.islandShadow*).
                 shape
                     .fill(Color.black)
-                    .shadow(color: .black.opacity(expanded ? 0.26 : 0.16), radius: expanded ? 14 : 8, y: expanded ? 8 : 3)
-                    .shadow(color: .black.opacity(expanded ? 0.22 : 0.18), radius: expanded ? 3 : 2, y: 1)
+                    .shadow(color: Theme.islandShadowAmbient.opacity(expanded ? 1 : 0.6), radius: expanded ? 22 : 10, y: expanded ? 12 : 4)
+                    .shadow(color: Theme.islandShadowNear.opacity(expanded ? 1 : 0.8), radius: expanded ? 6 : 3, y: expanded ? 3 : 1)
+                    .shadow(color: Theme.islandShadowContact, radius: 0.5, y: 0)
             )
             .scaleEffect(1 + 0.08 * panel.islandPull, anchor: .top)
             .animation(Theme.islandSpring, value: expanded)
             Spacer(minLength: 0)
         }
-        .padding(.horizontal, Theme.islandShadowMargin)
+        .padding(.horizontal, Theme.islandShadowSide)
+        .padding(.top, Theme.islandShadowTop)
         .frame(
             maxWidth: .infinity,
             maxHeight: .infinity,
