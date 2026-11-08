@@ -145,34 +145,43 @@ enum Menus {
             sub.add("Volume", checked: settings.showVolume, icon: "speaker.wave.2") { settings.showVolume.toggle() }
             sub.add("Audio Output", checked: settings.showOutput, icon: "airplayaudio") { settings.showOutput.toggle() }
         }
-        menu.addItem(.separator())
-
-        menu.add("Shrink When Paused", checked: settings.idleBehavior == .compact) {
-            settings.idleBehavior = settings.idleBehavior == .compact ? .stay : .compact
-        }
-        menu.add("Show Over Videos", checked: settings.showOverFullScreen) {
-            settings.showOverFullScreen.toggle()
-        }
-        let login = SMAppService.mainApp
-        menu.add("Open at Login", checked: login.status == .enabled) {
-            do {
-                if login.status == .enabled {
-                    try login.unregister()
-                } else {
-                    try login.register()
+        // The on/off settings live together in a submenu, with the usual checks, so the
+        // main menu keeps one column of icons and its last group is only app commands.
+        menu.addSubmenu("Settings", icon: "gearshape") { sub in
+            sub.add("Shrink When Paused", checked: settings.idleBehavior == .compact) {
+                settings.idleBehavior = settings.idleBehavior == .compact ? .stay : .compact
+            }
+            sub.add("Show Over Videos", checked: settings.showOverFullScreen) {
+                settings.showOverFullScreen.toggle()
+            }
+            let login = SMAppService.mainApp
+            sub.add("Open at Login", checked: login.status == .enabled) {
+                do {
+                    if login.status == .enabled {
+                        try login.unregister()
+                    } else {
+                        try login.register()
+                    }
+                } catch {
+                    Log.app.error("Couldn't change Open at Login: \(error.localizedDescription, privacy: .public)")
                 }
-            } catch {
-                Log.app.error("Couldn't change Open at Login: \(error.localizedDescription, privacy: .public)")
             }
         }
+        menu.addItem(.separator())
+
         let hide = menu.add(app.isPanelVisible ? "Hide Musicfy" : "Show Musicfy", key: "m") { app.togglePanel() }
         hide.keyEquivalentModifierMask = [.command, .option]
+        menu.add("Quit Musicfy", key: "q") { NSApp.terminate(nil) }
+        // The build, as a quiet footnote at the bottom.
         menu.addItem(.separator())
         let about = NSMenuItem(title: BuildInfo.label, action: nil, keyEquivalent: "")
+        about.attributedTitle = NSAttributedString(string: BuildInfo.label, attributes: [
+            .font: NSFont.systemFont(ofSize: NSFont.smallSystemFontSize),
+            .foregroundColor: NSColor.tertiaryLabelColor,
+        ])
         about.isEnabled = false
         if !menu.showsStateColumn { about.image = MenuIcon.blank }
         menu.addItem(about)
-        menu.add("Quit Musicfy", key: "q") { NSApp.terminate(nil) }
         return menu
     }
 
@@ -181,12 +190,14 @@ enum Menus {
     static func volumeItem(player: PlayerController) -> NSMenuItem {
         let item = NSMenuItem()
         let row = NSView(frame: NSRect(x: 0, y: 0, width: 264, height: 24))
+        row.autoresizingMask = [.width] // as wide as the menu
         let icon = NSImageView(frame: NSRect(x: 16, y: 4, width: 16, height: 16))
         icon.image = MenuIcon.symbol("speaker.wave.2")
         icon.contentTintColor = .labelColor
         let slider = NSSlider(value: Double(player.state?.volume ?? 0), minValue: 0, maxValue: 100, target: nil, action: nil)
         slider.frame = NSRect(x: 37, y: 2, width: 264 - 37 - 16, height: 20)
         slider.controlSize = .small
+        slider.autoresizingMask = [.width]
         slider.isContinuous = true
         let target = SliderTarget { player.setVolume(Int($0.rounded())) }
         slider.target = target
@@ -221,6 +232,8 @@ enum Menus {
     private static func viewItem<V: View>(_ view: V) -> NSMenuItem {
         let hosting = NSHostingView(rootView: view)
         hosting.frame = NSRect(origin: .zero, size: hosting.fittingSize)
+        // Stretches to the menu's width, so the cards line up with the separators.
+        hosting.autoresizingMask = [.width]
         let item = NSMenuItem()
         item.view = hosting
         return item
