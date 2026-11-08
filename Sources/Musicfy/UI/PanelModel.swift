@@ -17,7 +17,25 @@ final class PanelModel: ObservableObject {
         didSet { UserDefaults.standard.set(islandAlignment.rawValue, forKey: "islandAlignment") }
     }
 
+    /// Lado del modo tapa, que se agranda tirando de un borde. Se recuerda.
+    @Published var artworkSide: CGFloat = PanelModel.savedArtworkSide {
+        didSet { UserDefaults.standard.set(Double(artworkSide), forKey: "artworkSide") }
+    }
+
+    /// Cambio de modo con fundido: la vista vieja se achica y se va, la nueva llega con un resorte.
+    @Published var swapOut = false
+    /// Se está arrastrando la tapa o el compacto sobre la zona de la Isla (arriba al centro).
+    @Published var islandHint = false
+    /// La Isla se está tirando hacia abajo: de 0 a 1, cuánto falta para que se vuelva tapa.
+    @Published var islandPull: CGFloat = 0
+
     var actions = PanelActions()
+
+    private static var savedArtworkSide: CGFloat {
+        let saved = UserDefaults.standard.double(forKey: "artworkSide")
+        let side = saved > 0 ? CGFloat(saved) : Theme.artworkSize.width
+        return min(max(side, Theme.artworkSideRange.lowerBound), Theme.artworkSideRange.upperBound)
+    }
 }
 
 enum IslandAlignment: String {

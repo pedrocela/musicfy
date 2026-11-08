@@ -17,8 +17,11 @@ final class PlayerController: ObservableObject {
         didSet {
             artworkToken &+= 1
             palette = artwork.map(ArtworkPalette.from) ?? .neutral
+            makeGlass()
         }
     }
+    /// El vidrio del modo tapa, hecho con la tapa actual. `nil` mientras se calcula.
+    @Published private(set) var glass: ArtworkGlass?
     /// Colores de la tapa actual (fondo del compacto, acento de la Isla).
     @Published private(set) var palette = ArtworkPalette.neutral
     /// Cambia con cada tapa nueva: la interfaz lo usa para el fundido cruzado.
@@ -343,6 +346,21 @@ final class PlayerController: ObservableObject {
     }
 
     // MARK: - Apps
+
+    private func makeGlass() {
+        glass = nil
+        guard let image = artwork else { return }
+        let token = artworkToken
+        Task {
+            let glass = await withCheckedContinuation { continuation in
+                DispatchQueue.global(qos: .userInitiated).async {
+                    continuation.resume(returning: ArtworkGlass.make(from: image))
+                }
+            }
+            guard self.artworkToken == token else { return }
+            self.glass = glass
+        }
+    }
 
     func open(_ kind: SourceKind) {
         guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: kind.bundleID) else { return }

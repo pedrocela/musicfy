@@ -41,6 +41,9 @@ struct IslandView: View {
             .frame(width: size.width, height: size.height, alignment: .top)
             .clipShape(shape)
             .overlay(shape.strokeBorder(Theme.islandStroke, lineWidth: 0.5))
+            // Al tirarla hacia abajo crece un poco y se aclara el borde: avisa que se va a volver tapa.
+            .overlay(shape.strokeBorder(Color.white.opacity(0.28 * panel.islandPull), lineWidth: 1))
+            .scaleEffect(1 + 0.08 * panel.islandPull, anchor: .top)
             .shadow(color: .black.opacity(expanded ? 0.32 : 0.22), radius: expanded ? 20 : 10, y: expanded ? 10 : 4)
             .animation(Theme.smooth, value: expanded)
             Spacer(minLength: 0)
@@ -67,7 +70,9 @@ struct IslandView: View {
                         text: state.title,
                         font: Theme.islandTitle,
                         color: playing ? Theme.primary : Color.white.opacity(0.82),
-                        height: 16
+                        height: 16,
+                        trailingFade: 36,
+                        scrolls: false
                     )
                     if playing {
                         SubtitleLine(player: player, font: Theme.islandSubtitle, height: 14, text: islandSubtitle(state), showsLyric: true)
@@ -179,7 +184,7 @@ private struct ProgressRing: View {
                     .stroke(Color.white.opacity(0.12), lineWidth: 2)
                 Circle()
                     .trim(from: 0, to: fraction)
-                    .stroke(playing ? accent : Color.white.opacity(0.5), style: StrokeStyle(lineWidth: 2, lineCap: .round))
+                    .stroke(playing ? accent : Color.white.opacity(0.55), style: StrokeStyle(lineWidth: 2, lineCap: .round))
                     .rotationEffect(.degrees(-90))
                     .animation(.linear(duration: 0.5), value: fraction)
                 ZStack {
@@ -229,26 +234,31 @@ private struct Equalizer: View {
 /// de arriba y al soltar se pega a la izquierda, al centro o a la derecha.
 private struct IslandDragArea: NSViewRepresentable {
     final class DragView: NSView {
-        private var startMouseX: CGFloat = 0
-        private var startWindowX: CGFloat = 0
+        private var startMouse = NSPoint.zero
+        private var startOrigin = NSPoint.zero
 
         override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
         override func mouseDown(with event: NSEvent) {
-            startMouseX = NSEvent.mouseLocation.x
-            startWindowX = window?.frame.minX ?? 0
+            startMouse = NSEvent.mouseLocation
+            startOrigin = window?.frame.origin ?? .zero
         }
 
+        /// Hacia los costados la sigue tal cual; hacia abajo también, para volverla tapa.
+        /// Hacia arriba no se mueve: ya está pegada a la barra de menú.
         override func mouseDragged(with event: NSEvent) {
             guard let window else { return }
-            var origin = window.frame.origin
-            origin.x = startWindowX + (NSEvent.mouseLocation.x - startMouseX)
-            window.setFrameOrigin(origin)
+            let mouse = NSEvent.mouseLocation
+            let down = max(0, startMouse.y - mouse.y)
+            window.setFrameOrigin(NSPoint(x: startOrigin.x + (mouse.x - startMouse.x), y: startOrigin.y - down))
+            AppDelegate.shared?.islandPulled(by: down)
         }
 
         override func mouseUp(with event: NSEvent) {
-            if abs(NSEvent.mouseLocation.x - startMouseX) > 2 {
-                AppDelegate.shared?.snapIsland()
+            let mouse = NSEvent.mouseLocation
+            let down = max(0, startMouse.y - mouse.y)
+            if down > 2 || abs(mouse.x - startMouse.x) > 2 {
+                AppDelegate.shared?.islandReleased(pulled: down)
             }
         }
 

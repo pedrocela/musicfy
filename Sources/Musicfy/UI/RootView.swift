@@ -12,9 +12,26 @@ struct RootView: View {
                 IslandView(player: player, settings: settings, panel: panel)
             } else {
                 framed
+                    // Arrastrada arriba al centro: se achica hacia arriba, avisando que va a ser Isla.
+                    .scaleEffect(panel.islandHint ? 0.9 : 1, anchor: .top)
+                    .opacity(panel.islandHint ? 0.82 : 1)
             }
         }
+        // Cambio de forma (de o hacia la Isla): se va achicándose y desenfocándose hacia arriba,
+        // y lo nuevo llega desde ahí con un resorte.
+        .scaleEffect(panel.swapOut ? 0.8 : 1, anchor: swapAnchor)
+        .blur(radius: panel.swapOut ? 10 : 0)
+        .opacity(panel.swapOut ? 0 : 1)
         .environment(\.colorScheme, .dark)
+    }
+
+    private var swapAnchor: UnitPoint {
+        guard panel.mode == .island else { return .top }
+        switch panel.islandAlignment {
+        case .leading: return .topLeading
+        case .center: return .top
+        case .trailing: return .topTrailing
+        }
     }
 
     private var radius: CGFloat {
@@ -22,7 +39,7 @@ struct RootView: View {
     }
 
     private var baseHeight: CGFloat {
-        panel.mode == .artwork ? Theme.artworkSize.height : Theme.compactSize.height
+        panel.mode == .artwork ? panel.artworkSide : Theme.compactSize.height
     }
 
     private var framed: some View {

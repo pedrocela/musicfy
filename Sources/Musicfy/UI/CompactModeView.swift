@@ -85,7 +85,7 @@ struct CompactModeView: View {
                     }
                     .transition(.opacity.combined(with: .offset(x: 6)))
                 } else if let kind = player.state?.source {
-                    SourceChip(kind: kind, style: .plain)
+                    SourceChip(kind: kind, style: .plain, player: player)
                         .transition(.opacity)
                 }
             }

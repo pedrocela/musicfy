@@ -5,6 +5,8 @@ import SwiftUI
 enum Theme {
     // MARK: Medidas (puntos)
     static let artworkSize = CGSize(width: 320, height: 320)
+    /// El modo tapa se agranda tirando de un borde o una esquina; siempre cuadrado.
+    static let artworkSideRange: ClosedRange<CGFloat> = 280...640
     static let compactSize = CGSize(width: 320, height: 136)
     static let islandCollapsed = CGSize(width: 300, height: 40)
     static let islandExpanded = CGSize(width: 380, height: 156)
@@ -14,6 +16,8 @@ enum Theme {
     static let islandShadowMargin: CGFloat = 24
     /// Distancia entre la barra de menú y la Isla.
     static let islandTopGap: CGFloat = 8
+    /// Cuánto hay que bajar la Isla para que se vuelva tapa.
+    static let islandPullThreshold: CGFloat = 64
     /// Margen a los costados de la pantalla cuando la Isla se pega a un lado.
     static let islandSideGap: CGFloat = 12
 
@@ -47,10 +51,11 @@ enum Theme {
     static let barHeightActive: CGFloat = 7
 
     // MARK: Vidrio
-    static let chipFill = Color.black.opacity(0.38)
-    static let capsuleFill = Color(red: 0.157, green: 0.141, blue: 0.133).opacity(0.5)
-    static let capsuleStroke = Color.white.opacity(0.2)
-    static let roundButtonFill = Color.white.opacity(0.14)
+    static let roundButtonFill = Color.white.opacity(0.2)
+    /// Vidrio de las cápsulas sobre la tapa: la tapa difuminada, un velo oscuro y un filo de luz.
+    static let glassTint = Color.black.opacity(0.24)
+    static let glassEdgeTop = Color.white.opacity(0.32)
+    static let glassEdgeBottom = Color.white.opacity(0.06)
     static let windowStroke = Color.white.opacity(0.12)
     /// Sombra interna de luz arriba del modo compacto.
     static let topHighlight = Color.white.opacity(0.12)
@@ -77,4 +82,30 @@ enum Theme {
     static let press = Animation.spring(response: 0.24, dampingFraction: 0.62)
     /// Duración del cambio de tamaño de la ventana (AppKit), con curva suave de salida.
     static let resizeDuration: TimeInterval = 0.4
+    /// Lo que tardan en irse los controles después de que sale el mouse.
+    static let hoverExitDelay: TimeInterval = 0.3
+}
+
+// MARK: - Escala del modo tapa
+
+private struct UIScaleKey: EnvironmentKey {
+    static let defaultValue: CGFloat = 1
+}
+
+private struct ArtworkSideKey: EnvironmentKey {
+    static let defaultValue: CGFloat = 320
+}
+
+extension EnvironmentValues {
+    /// Cuánto crecen los controles con la tapa. 1 en el tamaño de base.
+    var uiScale: CGFloat {
+        get { self[UIScaleKey.self] }
+        set { self[UIScaleKey.self] = newValue }
+    }
+
+    /// Lado de la tapa en puntos (para ubicar el vidrio de las cápsulas sobre ella).
+    var artworkSide: CGFloat {
+        get { self[ArtworkSideKey.self] }
+        set { self[ArtworkSideKey.self] = newValue }
+    }
 }

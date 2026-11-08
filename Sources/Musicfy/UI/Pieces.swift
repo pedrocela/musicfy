@@ -3,29 +3,47 @@ import SwiftUI
 // MARK: - Chip de la app
 
 /// "● Music" / "● Spotify". En vidrio sobre la tapa, o suelto en el compacto.
+/// Al tocarlo se abre la app.
 struct SourceChip: View {
     enum Style { case glass, plain }
     let kind: SourceKind
     var style: Style = .glass
+    /// Para el vidrio del modo tapa y para abrir la app.
+    @ObservedObject var player: PlayerController
+    @Environment(\.uiScale) private var scale
+    @State private var hovering = false
 
     var body: some View {
-        HStack(spacing: style == .glass ? 6 : 5) {
-            Circle()
-                .fill(Theme.sourceColor(kind))
-                .frame(width: style == .glass ? 7 : 6, height: style == .glass ? 7 : 6)
-            Text(kind.displayName)
-                .font(style == .glass ? Theme.chip : .system(size: 11, weight: .semibold))
-                .foregroundStyle(style == .glass ? Theme.primary : Color.white.opacity(0.78))
-                .contentTransition(.opacity)
-        }
-        .padding(.horizontal, style == .glass ? 10 : 0)
-        .frame(height: style == .glass ? 26 : nil)
-        .background {
-            if style == .glass {
-                Capsule().fill(.ultraThinMaterial).environment(\.colorScheme, .dark)
-                    .overlay(Capsule().fill(Theme.chipFill))
+        Button { player.open(kind) } label: {
+            HStack(spacing: (style == .glass ? 6 : 5) * scale) {
+                Circle()
+                    .fill(Theme.sourceColor(kind))
+                    .frame(width: (style == .glass ? 7 : 6) * scale, height: (style == .glass ? 7 : 6) * scale)
+                Text(kind.displayName)
+                    .font(style == .glass ? Font.system(size: 12 * scale, weight: .semibold) : Font.system(size: 11, weight: .semibold))
+                    .foregroundStyle(style == .glass ? Theme.primary : Color.white.opacity(hovering ? 1 : 0.78))
+                    .contentTransition(.opacity)
+                if hovering {
+                    Image(systemName: "arrow.up.forward")
+                        .font(.system(size: (style == .glass ? 9 : 8) * scale, weight: .bold))
+                        .foregroundStyle(Color.white.opacity(0.7))
+                        .transition(.opacity.combined(with: .scale(scale: 0.6, anchor: .leading)))
+                }
             }
+            .padding(.horizontal, style == .glass ? 10 * scale : 0)
+            .frame(height: style == .glass ? 26 * scale : nil)
+            .background {
+                if style == .glass {
+                    GlassBackdrop(player: player, shape: Capsule())
+                        .overlay(Capsule().fill(Color.white.opacity(hovering ? 0.08 : 0)))
+                }
+            }
+            .contentShape(Capsule())
         }
+        .buttonStyle(PressableStyle())
+        .help("Abrir \(kind.displayName)")
+        .onHover { hovering = $0 }
+        .animation(Theme.fade, value: hovering)
         .animation(Theme.crossfade, value: kind)
     }
 }
@@ -35,29 +53,46 @@ struct SourceChip: View {
 struct TimeBar: View {
     @ObservedObject var player: PlayerController
     var fill: Color = Theme.barFill
+    /// Los tiempos debajo de la barra, a los costados (modo tapa, como en Music).
+    var stacked = false
     @State private var dragFraction: Double?
+    @Environment(\.uiScale) private var scale
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: 0.25)) { context in
             let duration = player.state?.duration ?? 0
             let live = player.position(at: context.date)
             let shown = dragFraction.map { $0 * duration } ?? live
-            HStack(spacing: 10) {
-                Text(TimeText.format(shown))
-                    .frame(minWidth: 30, alignment: .leading)
-                ScrubBar(
-                    fraction: duration > 0 ? shown / duration : 0,
-                    fill: fill,
-                    onChange: { dragFraction = $0 },
-                    onCommit: { value in
-                        player.seek(toFraction: value)
-                        dragFraction = nil
+            let bar = ScrubBar(
+                fraction: duration > 0 ? shown / duration : 0,
+                fill: fill,
+                onChange: { dragFraction = $0 },
+                onCommit: { value in
+                    player.seek(toFraction: value)
+                    dragFraction = nil
+                }
+            )
+            let elapsed = Text(TimeText.format(shown))
+            let remaining = Text("−" + TimeText.format(max(0, duration - shown)))
+            Group {
+                if stacked {
+                    VStack(spacing: 1 * scale) {
+                        bar
+                        HStack {
+                            elapsed
+                            Spacer(minLength: 8)
+                            remaining
+                        }
                     }
-                )
-                Text("−" + TimeText.format(max(0, duration - shown)))
-                    .frame(minWidth: 34, alignment: .trailing)
+                } else {
+                    HStack(spacing: 10) {
+                        elapsed.frame(minWidth: 30, alignment: .leading)
+                        bar
+                        remaining.frame(minWidth: 34, alignment: .trailing)
+                    }
+                }
             }
-            .font(Theme.time)
+            .font(.system(size: 11 * scale, weight: .medium).monospacedDigit())
             .foregroundStyle(Theme.timeColor)
         }
     }
@@ -104,6 +139,7 @@ struct TransportRow: View {
     var size: Size = .large
     /// La Isla abierta sólo muestra anterior, play y siguiente, centrados.
     var showsModes = true
+    @Environment(\.uiScale) private var scale
 
     var body: some View {
         let state = player.state
@@ -137,7 +173,7 @@ struct TransportRow: View {
                 )
             }
         }
-        .frame(height: size.height)
+        .frame(height: size.height * scale)
     }
 }
 
@@ -154,6 +190,7 @@ struct ToolbarIcons: View {
     var tint: Color = Theme.primary
     /// En el compacto no entra todo: la salida de audio queda en el menú.
     var includesOutput = true
+    @Environment(\.uiScale) private var scale
 
     var body: some View {
         HStack(spacing: 0) {
@@ -203,10 +240,10 @@ struct ToolbarIcons: View {
     private func icon(_ symbol: String, _ help: String, active: Bool = false, _ action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: symbol)
-                .font(.system(size: iconSize, weight: .semibold))
+                .font(.system(size: iconSize * scale, weight: .semibold))
                 .foregroundStyle(tint)
                 .contentTransition(.symbolEffect(.replace))
-                .frame(width: cell, height: cell)
+                .frame(width: cell * scale, height: cell * scale)
                 .background(
                     Circle()
                         .fill(Color.white.opacity(active ? 0.24 : 0))
@@ -226,15 +263,16 @@ struct GlassCapsule: View {
     @ObservedObject var player: PlayerController
     @ObservedObject var settings: Settings
     @ObservedObject var panel: PanelModel
+    @Environment(\.uiScale) private var scale
 
     var body: some View {
         ZStack {
             if panel.volumeOpen {
-                HStack(spacing: 6) {
+                HStack(spacing: 6 * scale) {
                     Button { panel.volumeOpen = false } label: {
                         Image(systemName: "speaker.wave.2.fill")
-                            .font(.system(size: 13, weight: .semibold))
-                            .frame(width: 28, height: 32)
+                            .font(.system(size: 13 * scale, weight: .semibold))
+                            .frame(width: 28 * scale, height: 32 * scale)
                             .contentShape(Rectangle())
                     }
                     .buttonStyle(PressableStyle())
@@ -244,8 +282,8 @@ struct GlassCapsule: View {
                         onCommit: { player.setVolume(Int(($0 * 100).rounded())) },
                         smoothFill: false
                     )
-                    .frame(width: 112)
-                    .padding(.trailing, 10)
+                    .frame(width: 112 * scale)
+                    .padding(.trailing, 10 * scale)
                 }
                 .transition(.opacity.combined(with: .scale(scale: 0.9, anchor: .trailing)))
             } else {
@@ -254,13 +292,9 @@ struct GlassCapsule: View {
             }
         }
         .foregroundStyle(Theme.primary)
-        .padding(.horizontal, 4)
-        .frame(height: 32)
-        .background(
-            Capsule().fill(.ultraThinMaterial).environment(\.colorScheme, .dark)
-                .overlay(Capsule().fill(Theme.capsuleFill))
-                .overlay(Capsule().strokeBorder(Theme.capsuleStroke, lineWidth: 0.5))
-        )
+        .padding(.horizontal, 4 * scale)
+        .frame(height: 32 * scale)
+        .background(GlassBackdrop(player: player, shape: Capsule()))
         .animation(Theme.smooth, value: panel.volumeOpen)
     }
 }

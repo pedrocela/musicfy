@@ -53,7 +53,10 @@ struct WindowDragArea: NSViewRepresentable {
             if event.clickCount == 2 {
                 onDoubleClick()
             } else {
+                // Arrastrar la ventana; si se suelta arriba al centro, se vuelve Isla.
+                AppDelegate.shared?.windowDragBegan()
                 window?.performDrag(with: event)
+                if NSEvent.pressedMouseButtons & 1 == 0 { AppDelegate.shared?.windowDragEnded() }
             }
         }
 
@@ -97,14 +100,15 @@ struct IconButton: View {
     var tint: Color = Theme.primary
     var help: String = ""
     let action: () -> Void
+    @Environment(\.uiScale) private var scale
 
     var body: some View {
         Button(action: action) {
             Image(systemName: symbol)
-                .font(.system(size: size, weight: .semibold))
+                .font(.system(size: size * scale, weight: .semibold))
                 .foregroundStyle(tint)
                 .contentTransition(.symbolEffect(.replace))
-                .frame(width: size + 18, height: size + 14)
+                .frame(width: (size + 18) * scale, height: (size + 14) * scale)
                 .contentShape(Rectangle())
         }
         .buttonStyle(PressableStyle())
@@ -121,14 +125,15 @@ struct RoundButton: View {
     var diameter: CGFloat = 30
     var help: String = ""
     let action: () -> Void
+    @Environment(\.uiScale) private var scale
 
     var body: some View {
         Button(action: action) {
             Image(systemName: symbol)
-                .font(.system(size: 13, weight: .semibold))
+                .font(.system(size: 13 * scale, weight: .semibold))
                 .foregroundStyle(tint)
                 .contentTransition(.symbolEffect(.replace))
-                .frame(width: diameter, height: diameter)
+                .frame(width: diameter * scale, height: diameter * scale)
                 .background(Circle().fill(Theme.roundButtonFill))
                 .contentShape(Circle())
         }
@@ -150,12 +155,13 @@ struct ScrubBar: View {
     /// La barra de progreso avanza en tramos de 0,25 s; con esto el avance se ve continuo.
     var smoothFill = true
     @State private var active = false
+    @Environment(\.uiScale) private var scale
 
     var body: some View {
         GeometryReader { geo in
             let width = max(1, geo.size.width)
             let clamped = max(0, min(1, fraction))
-            let height = active ? Theme.barHeightActive : Theme.barHeight
+            let height = (active ? Theme.barHeightActive : Theme.barHeight) * scale
             ZStack(alignment: .leading) {
                 Capsule().fill(track)
                 Rectangle()
@@ -180,7 +186,7 @@ struct ScrubBar: View {
             )
             .animation(Theme.press, value: active)
         }
-        .frame(height: 16)
+        .frame(height: 16 * scale)
     }
 }
 
@@ -197,6 +203,10 @@ struct MarqueeText: View {
     let font: Font
     let color: Color
     let height: CGFloat
+    /// Ancho del fundido de la derecha cuando el texto no entra. `nil`: un 8 % del ancho.
+    var trailingFade: CGFloat? = nil
+    /// Si es `false`, el texto largo no se desliza: queda cortado con el fundido.
+    var scrolls = true
 
     @State private var textWidth: CGFloat = 0
     @State private var containerWidth: CGFloat = 0
@@ -233,11 +243,12 @@ struct MarqueeText: View {
 
     /// Bordes que se desvanecen sólo cuando hay texto cortado de ese lado.
     private var edgeFade: some View {
-        LinearGradient(
+        let fadeStart = trailingFade.map { containerWidth > 0 ? max(0.5, 1 - $0 / containerWidth) : 0.85 } ?? 0.92
+        return LinearGradient(
             stops: [
                 .init(color: offset < 0 ? .clear : .black, location: 0),
                 .init(color: .black, location: 0.05),
-                .init(color: .black, location: 0.92),
+                .init(color: .black, location: fadeStart),
                 .init(color: overflow > 1 ? .clear : .black, location: 1),
             ],
             startPoint: .leading,
@@ -248,7 +259,7 @@ struct MarqueeText: View {
     private func scroll() async {
         offset = 0
         let distance = overflow
-        guard distance > 1 else { return }
+        guard scrolls, distance > 1 else { return }
         let travel = Double(distance) / 28 // puntos por segundo
         while !Task.isCancelled {
             try? await Task.sleep(for: .seconds(2.5))
@@ -290,6 +301,44 @@ struct ArtworkFill: View {
             .frame(width: geo.size.width, height: geo.size.height)
             .clipped()
         }
+    }
+}
+
+/// Nombre del espacio de coordenadas de la tapa, para ubicar el vidrio de las cápsulas.
+enum ArtworkSpace {
+    static let name = "artwork"
+}
+
+/// Vidrio de verdad sobre la tapa: muestra la tapa difuminada que queda justo detrás
+/// de la forma, con un velo oscuro y un filo de luz arriba. Sólo sirve dentro del modo tapa.
+struct GlassBackdrop<S: InsettableShape>: View {
+    @ObservedObject var player: PlayerController
+    let shape: S
+    @Environment(\.artworkSide) private var side
+
+    var body: some View {
+        GeometryReader { proxy in
+            let frame = proxy.frame(in: .named(ArtworkSpace.name))
+            ZStack {
+                if let frosted = player.glass?.frosted {
+                    ArtworkFill(image: frosted)
+                } else {
+                    ArtworkFill(image: player.artwork)
+                        .blur(radius: 20, opaque: true)
+                }
+            }
+            .frame(width: side, height: side)
+            .offset(x: -frame.minX, y: -frame.minY)
+        }
+        .clipShape(shape)
+        .overlay(shape.fill(Theme.glassTint))
+        .overlay(
+            shape.strokeBorder(
+                LinearGradient(colors: [Theme.glassEdgeTop, Theme.glassEdgeBottom], startPoint: .top, endPoint: .bottom),
+                lineWidth: 0.75
+            )
+        )
+        .allowsHitTesting(false)
     }
 }
 
