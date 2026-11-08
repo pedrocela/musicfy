@@ -217,8 +217,6 @@ private struct ProgressRing: View {
                 } else {
                     PlayTriangle()
                         .fill(Theme.secondary)
-                        .frame(width: PlayTriangle.width, height: PlayTriangle.height)
-                        .offset(x: PlayTriangle.opticalShift)
                         .transition(.opacity.combined(with: .scale(scale: 0.5)))
                 }
             }
@@ -230,25 +228,29 @@ private struct ProgressRing: View {
     }
 }
 
-/// The play glyph of the closed Island, drawn by hand so it sits dead center in the ring.
+/// The play glyph of the closed Island, drawn by hand so it sits centered in the ring.
 ///
-/// The SF Symbol carries its own side bearing, which pushed it 1.5 pt to the right at
-/// this size. Here the box is centered and then nudged right by half the gap between the
-/// box's center and the triangle's centroid: the eye reads that as centered, as in Music.
+/// It fills the ring's frame and puts the triangle's centroid (a third of the way in from
+/// the flat side) on the center, not its box: centered by the box, the heavy flat side
+/// makes it read as shifted left. Drawing it in the full frame also keeps pixel snapping
+/// from eating a small offset.
 private struct PlayTriangle: Shape {
-    static let width: CGFloat = 7.5
-    static let height: CGFloat = 8.5
-    static let opticalShift: CGFloat = width / 12
+    private static let width: CGFloat = 8
+    private static let height: CGFloat = 9
     private static let cornerRadius: CGFloat = 1.3
 
     func path(in rect: CGRect) -> Path {
-        let a = CGPoint(x: rect.minX, y: rect.minY)
-        let b = CGPoint(x: rect.maxX, y: rect.midY)
-        let c = CGPoint(x: rect.minX, y: rect.maxY)
+        let left = rect.midX - Self.width / 3
+        let right = rect.midX + Self.width * 2 / 3
+        let top = rect.midY - Self.height / 2
+        let bottom = rect.midY + Self.height / 2
+        let a = CGPoint(x: left, y: top)
+        let b = CGPoint(x: right, y: rect.midY)
+        let c = CGPoint(x: left, y: bottom)
         let r = Self.cornerRadius
         var path = Path()
         // Start halfway down the flat side so every corner gets the same rounding.
-        path.move(to: CGPoint(x: rect.minX, y: rect.midY))
+        path.move(to: CGPoint(x: left, y: rect.midY))
         path.addArc(tangent1End: a, tangent2End: b, radius: r)
         path.addArc(tangent1End: b, tangent2End: c, radius: r)
         path.addArc(tangent1End: c, tangent2End: a, radius: r)
