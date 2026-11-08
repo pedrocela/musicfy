@@ -190,15 +190,34 @@ struct IslandView: View {
         .frame(width: Theme.islandExpanded.width, height: Theme.islandExpanded.height, alignment: .top)
     }
 
+    /// Clicking the cover brings the app that's playing to the front, as in compact.
     private func thumbnail(side: CGFloat, radius: CGFloat) -> some View {
-        ZStack { CrossfadingArtwork(player: player) }
-            .frame(width: side, height: side)
-            .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: radius, style: .continuous)
-                    .strokeBorder(Color.white.opacity(0.1), lineWidth: 0.5)
-            )
-            .allowsHitTesting(false)
+        IslandCover(player: player, side: side, radius: radius)
+    }
+}
+
+private struct IslandCover: View {
+    @ObservedObject var player: PlayerController
+    let side: CGFloat
+    let radius: CGFloat
+    @State private var hovering = false
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
+        Button {
+            if let kind = player.state?.source { player.open(kind) }
+        } label: {
+            ZStack { CrossfadingArtwork(player: player) }
+                .frame(width: side, height: side)
+                .overlay(Color.black.opacity(hovering ? 0.15 : 0))
+                .clipShape(shape)
+                .overlay(shape.strokeBorder(Color.white.opacity(hovering ? 0.25 : 0.1), lineWidth: 0.5))
+                .contentShape(shape)
+        }
+        .buttonStyle(PressableStyle())
+        .help(player.state.map { "Open \($0.source.displayName)" } ?? "")
+        .onHover { hovering = $0 }
+        .animation(Theme.fade, value: hovering)
     }
 }
 
