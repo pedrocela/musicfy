@@ -248,10 +248,37 @@ struct MarqueeText: View {
     @State private var textWidth: CGFloat = 0
     @State private var containerWidth: CGFloat = 0
     @State private var offset: CGFloat = 0
+    @Environment(\.marqueeOnLayer) private var onLayer
 
     private var overflow: CGFloat { max(0, textWidth - containerWidth) }
 
+    /// Scrolling text that's always on screen (compact, the Island) runs on Core Animation:
+    /// SwiftUI would redraw the window on every frame of the scroll, paused or not.
+    private var layerScroll: Bool { onLayer && scrolls && overflow > 1 && containerWidth > 0 }
+
     var body: some View {
+        base
+            .opacity(layerScroll ? 0 : 1)
+            .overlay {
+                if layerScroll {
+                    MarqueeLayer(
+                        text: text,
+                        font: font,
+                        color: color,
+                        textWidth: textWidth,
+                        containerWidth: containerWidth,
+                        fadeStart: fadeStart
+                    )
+                    .allowsHitTesting(false)
+                }
+            }
+    }
+
+    private var fadeStart: CGFloat {
+        trailingFade.map { containerWidth > 0 ? max(0.5, 1 - $0 / containerWidth) : 0.85 } ?? 0.92
+    }
+
+    private var base: some View {
         Text(text)
             .font(font)
             .foregroundStyle(color)
@@ -280,7 +307,6 @@ struct MarqueeText: View {
 
     /// Edges fade only when text is cut off on that side.
     private var edgeFade: some View {
-        let fadeStart = trailingFade.map { containerWidth > 0 ? max(0.5, 1 - $0 / containerWidth) : 0.85 } ?? 0.92
         return LinearGradient(
             stops: [
                 .init(color: offset < 0 ? .clear : .black, location: 0),
@@ -296,7 +322,7 @@ struct MarqueeText: View {
     private func scroll() async {
         offset = 0
         let distance = overflow
-        guard scrolls, distance > 1 else { return }
+        guard scrolls, distance > 1, !layerScroll else { return }
         let travel = Double(distance) / 28 // points per second
         while !Task.isCancelled {
             try? await Task.sleep(for: .seconds(2.5))
@@ -307,6 +333,143 @@ struct MarqueeText: View {
             withAnimation(.easeInOut(duration: 0.7)) { offset = 0 }
             try? await Task.sleep(for: .seconds(0.7))
         }
+    }
+}
+
+/// The scrolling part of `MarqueeText` on Core Animation: the same text (SwiftUI, drawn
+/// once), the same loop and the same edge fades, moved by the window server.
+///
+/// The loop, as in `MarqueeText.scroll()`: 2.5 s still, slide left at 28 pt/s until the end
+/// shows, 2 s still, 0.7 s back. The left fade appears while it slides and goes away on
+/// the way back.
+private struct MarqueeLayer: NSViewRepresentable {
+    let text: String
+    let font: Font
+    let color: Color
+    let textWidth: CGFloat
+    let containerWidth: CGFloat
+    let fadeStart: CGFloat
+
+    func makeNSView(context: Context) -> MarqueeLayerView { MarqueeLayerView() }
+
+    func updateNSView(_ view: MarqueeLayerView, context: Context) {
+        view.configure(
+            content: AnyView(
+                Text(text)
+                    .font(font)
+                    .foregroundStyle(color)
+                    .lineLimit(1)
+                    .fixedSize()
+            ),
+            key: "\(text)|\(Int(textWidth))|\(Int(containerWidth))",
+            textWidth: textWidth,
+            fadeStart: fadeStart
+        )
+    }
+}
+
+final class MarqueeLayerView: NSView {
+    private final class PassThroughHost: NSHostingView<AnyView> {
+        override func hitTest(_ point: NSPoint) -> NSView? { nil }
+    }
+
+    private let host = PassThroughHost(rootView: AnyView(EmptyView()))
+    private let fade = CAGradientLayer()
+    private var key = ""
+    private var runningLoop = ""
+    private var textWidth: CGFloat = 0
+    private var fadeStart: CGFloat = 0.92
+
+    override init(frame: NSRect) {
+        super.init(frame: frame)
+        wantsLayer = true
+        host.sizingOptions = []
+        host.wantsLayer = true
+        addSubview(host)
+        fade.startPoint = CGPoint(x: 0, y: 0.5)
+        fade.endPoint = CGPoint(x: 1, y: 0.5)
+        layer?.mask = fade
+        layer?.masksToBounds = true
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+    func configure(content: AnyView, key: String, textWidth: CGFloat, fadeStart: CGFloat) {
+        guard key != self.key || fadeStart != self.fadeStart else { return }
+        self.key = key
+        self.textWidth = textWidth
+        self.fadeStart = fadeStart
+        host.rootView = content
+        needsLayout = true
+    }
+
+    override func layout() {
+        super.layout()
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        let height = host.fittingSize.height
+        host.frame = NSRect(x: 0, y: (bounds.height - height) / 2, width: max(textWidth, host.fittingSize.width) + 2, height: height)
+        fade.frame = bounds
+        let opaque = NSColor.black.cgColor
+        let clear = NSColor.black.withAlphaComponent(0).cgColor
+        fade.colors = [opaque, opaque, opaque, clear]
+        fade.locations = [0, 0.05, NSNumber(value: Double(fadeStart)), 1]
+        CATransaction.commit()
+        startLoop()
+    }
+
+    /// Starts over only when the text or the room for it changes, like the SwiftUI version.
+    private func startLoop() {
+        let loop = "\(key)|\(Int(bounds.width))|\(Int(bounds.height))"
+        guard loop != runningLoop || host.layer?.animation(forKey: "marquee") == nil else { return }
+        runningLoop = loop
+        host.layer?.removeAnimation(forKey: "marquee")
+        fade.removeAnimation(forKey: "marquee")
+        let distance = max(0, textWidth - bounds.width)
+        guard distance > 1, let hostLayer = host.layer else { return }
+
+        let travel = Double(distance) / 28
+        let total = 2.5 + travel + 2 + 0.7
+        let times: [NSNumber] = [0, 2.5 / total, (2.5 + travel) / total, (4.5 + travel) / total, 1].map { NSNumber(value: $0) }
+        let timing = [
+            CAMediaTimingFunction(name: .linear),
+            CAMediaTimingFunction(name: .linear),
+            CAMediaTimingFunction(name: .linear),
+            CAMediaTimingFunction(name: .easeInEaseOut),
+        ]
+        let now = CACurrentMediaTime()
+
+        let slide = CAKeyframeAnimation(keyPath: "transform.translation.x")
+        let end = -(distance + 6)
+        slide.values = [0, 0, end, end, 0]
+        slide.keyTimes = times
+        slide.timingFunctions = timing
+        slide.duration = total
+        slide.repeatCount = .infinity
+        slide.beginTime = now
+        slide.isRemovedOnCompletion = false
+        hostLayer.add(slide, forKey: "marquee")
+
+        // The left edge fades only while the start of the text is out of view.
+        let opaque = NSColor.black.cgColor
+        let clear = NSColor.black.withAlphaComponent(0).cgColor
+        let leftEdge = CAKeyframeAnimation(keyPath: "colors")
+        leftEdge.values = [
+            [opaque, opaque, opaque, clear],
+            [opaque, opaque, opaque, clear],
+            [clear, opaque, opaque, clear],
+            [clear, opaque, opaque, clear],
+            [opaque, opaque, opaque, clear],
+        ]
+        leftEdge.keyTimes = times
+        leftEdge.timingFunctions = timing
+        leftEdge.duration = total
+        leftEdge.repeatCount = .infinity
+        leftEdge.beginTime = now
+        leftEdge.isRemovedOnCompletion = false
+        fade.add(leftEdge, forKey: "marquee")
     }
 }
 

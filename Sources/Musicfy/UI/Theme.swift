@@ -130,7 +130,19 @@ private struct ArtworkSideKey: EnvironmentKey {
     static let defaultValue: CGFloat = 320
 }
 
+private struct MarqueeOnLayerKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
 extension EnvironmentValues {
+    /// Scrolling text runs on Core Animation (compact and the Island, which are always on
+    /// screen). Off in artwork mode: its controls carry a SwiftUI shadow, which a layer
+    /// wouldn't get.
+    var marqueeOnLayer: Bool {
+        get { self[MarqueeOnLayerKey.self] }
+        set { self[MarqueeOnLayerKey.self] = newValue }
+    }
+
     /// How much the controls grow with the artwork. 1 at the base size.
     var uiScale: CGFloat {
         get { self[UIScaleKey.self] }

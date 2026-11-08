@@ -65,6 +65,7 @@ struct IslandView: View {
             alignment: Alignment(horizontal: panel.islandAlignment.horizontal, vertical: .top)
         )
         .environment(\.colorScheme, .dark)
+        .environment(\.marqueeOnLayer, true)
         .onAppear {
             withAnimation(Theme.smooth.delay(0.03)) { settled = true }
         }
