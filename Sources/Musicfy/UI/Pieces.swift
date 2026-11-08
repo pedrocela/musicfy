@@ -318,7 +318,7 @@ struct LyricsPanel: View {
                         .font(.system(size: 16, weight: .semibold))
                         .lineSpacing(4)
                         .foregroundStyle(Theme.primary.opacity(0.85))
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
                         .padding(20)
                 }
             } else {
@@ -362,7 +362,7 @@ private struct SyncedLyrics: View {
                             .foregroundStyle(Theme.primary.opacity(isCurrent ? 1 : 0.32))
                             .blur(radius: isCurrent ? 0 : 0.6)
                             .scaleEffect(isCurrent ? 1 : 0.97, anchor: .leading)
-                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
                             .id(index)
                             .animation(Theme.smooth, value: isCurrent)
                     }

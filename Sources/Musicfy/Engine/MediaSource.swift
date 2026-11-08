@@ -81,44 +81,44 @@ final class MusicSource: MediaSource {
         """
         if application id "com.apple.Music" is not running then return {"stopped"}
         tell application id "com.apple.Music"
-        \tset st to "stopped"
+        \tset mfSt to "stopped"
         \tif player state is playing or player state is fast forwarding or player state is rewinding then
-        \t\tset st to "playing"
+        \t\tset mfSt to "playing"
         \telse if player state is paused then
-        \t\tset st to "paused"
+        \t\tset mfSt to "paused"
         \tend if
-        \tif st is "stopped" then return {"stopped"}
-        \tset nm to ""
-        \tset ar to ""
-        \tset al to ""
-        \tset du to 0
-        \tset tid to ""
-        \tset fav to false
+        \tif mfSt is "stopped" then return {"stopped"}
+        \tset mfNm to ""
+        \tset mfAr to ""
+        \tset mfAl to ""
+        \tset mfDu to 0
+        \tset mfTid to ""
+        \tset mfFav to false
         \ttry
-        \t\tset t to current track
-        \t\tset nm to name of t
-        \t\tset ar to artist of t
-        \t\tset al to album of t
-        \t\tset du to duration of t
-        \t\tset tid to persistent ID of t
-        \t\tset fav to \(favoriteProperty) of t
+        \t\tset mfT to current track
+        \t\tset mfNm to name of mfT
+        \t\tset mfAr to artist of mfT
+        \t\tset mfAl to album of mfT
+        \t\tset mfDu to duration of mfT
+        \t\tset mfTid to persistent ID of mfT
+        \t\tset mfFav to \(favoriteProperty) of mfT
         \tend try
-        \tif nm is "" then
+        \tif mfNm is "" then
         \t\ttry
-        \t\t\tset nm to current stream title
+        \t\t\tset mfNm to current stream title
         \t\tend try
         \tend if
-        \tset pos to 0
+        \tset mfPos to 0
         \ttry
-        \t\tset pos to player position
+        \t\tset mfPos to player position
         \tend try
-        \tset rp to "off"
+        \tset mfRp to "off"
         \tif song repeat is all then
-        \t\tset rp to "all"
+        \t\tset mfRp to "all"
         \telse if song repeat is one then
-        \t\tset rp to "one"
+        \t\tset mfRp to "one"
         \tend if
-        \treturn {st, nm, ar, al, du, pos, tid, sound volume, shuffle enabled, rp, fav, ""}
+        \treturn {mfSt, mfNm, mfAr, mfAl, mfDu, mfPos, mfTid, sound volume, shuffle enabled, mfRp, mfFav, ""}
         end tell
         """
     }
@@ -172,23 +172,23 @@ final class MusicSource: MediaSource {
         if application id "com.apple.Music" is not running then return {}
         tell application id "com.apple.Music"
         \ttry
-        \t\tset pl to current playlist
-        \t\tset plName to name of pl
-        \t\tset idx to index of current track
-        \t\tset total to count of tracks of pl
+        \t\tset mfPl to current playlist
+        \t\tset mfPlName to name of mfPl
+        \t\tset mfIdx to index of current track
+        \t\tset mfTotal to count of tracks of mfPl
         \ton error
         \t\treturn {}
         \tend try
-        \tset lastIndex to idx + 30
-        \tif lastIndex > total then set lastIndex to total
-        \tset rows to {}
-        \trepeat with i from (idx + 1) to lastIndex
+        \tset mfLastIndex to mfIdx + 30
+        \tif mfLastIndex > mfTotal then set mfLastIndex to mfTotal
+        \tset mfRows to {}
+        \trepeat with mfI from (mfIdx + 1) to mfLastIndex
         \t\ttry
-        \t\t\tset t to track i of pl
-        \t\t\tset end of rows to {name of t, artist of t, album of t, persistent ID of t, i}
+        \t\t\tset mfT to track mfI of mfPl
+        \t\t\tset end of mfRows to {name of mfT, artist of mfT, album of mfT, persistent ID of mfT, mfI}
         \t\tend try
         \tend repeat
-        \treturn {plName, rows}
+        \treturn {mfPlName, mfRows}
         end tell
         """
 
@@ -229,35 +229,35 @@ final class SpotifySource: MediaSource {
     private let stateScript = """
         if application id "com.spotify.client" is not running then return {"stopped"}
         tell application id "com.spotify.client"
-        \tset st to "stopped"
+        \tset mfSt to "stopped"
         \tif player state is playing then
-        \t\tset st to "playing"
+        \t\tset mfSt to "playing"
         \telse if player state is paused then
-        \t\tset st to "paused"
+        \t\tset mfSt to "paused"
         \tend if
-        \tif st is "stopped" then return {"stopped"}
-        \tset nm to ""
-        \tset ar to ""
-        \tset al to ""
-        \tset du to 0
-        \tset tid to ""
-        \tset aw to ""
+        \tif mfSt is "stopped" then return {"stopped"}
+        \tset mfNm to ""
+        \tset mfAr to ""
+        \tset mfAl to ""
+        \tset mfDu to 0
+        \tset mfTid to ""
+        \tset mfAw to ""
         \ttry
-        \t\tset t to current track
-        \t\tset nm to name of t
-        \t\tset ar to artist of t
-        \t\tset al to album of t
-        \t\tset du to (duration of t) / 1000
-        \t\tset tid to id of t
-        \t\tset aw to artwork url of t
+        \t\tset mfT to current track
+        \t\tset mfNm to name of mfT
+        \t\tset mfAr to artist of mfT
+        \t\tset mfAl to album of mfT
+        \t\tset mfDu to (duration of mfT) / 1000
+        \t\tset mfTid to id of mfT
+        \t\tset mfAw to artwork url of mfT
         \tend try
-        \tset pos to 0
+        \tset mfPos to 0
         \ttry
-        \t\tset pos to player position
+        \t\tset mfPos to player position
         \tend try
-        \tset rp to "off"
-        \tif repeating then set rp to "all"
-        \treturn {st, nm, ar, al, du, pos, tid, sound volume, shuffling, rp, false, aw}
+        \tset mfRp to "off"
+        \tif repeating then set mfRp to "all"
+        \treturn {mfSt, mfNm, mfAr, mfAl, mfDu, mfPos, mfTid, sound volume, shuffling, mfRp, false, mfAw}
         end tell
         """
 

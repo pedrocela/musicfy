@@ -215,7 +215,9 @@ struct MarqueeText: View {
             })
             .onPreferenceChange(WidthKey.self) { textWidth = $0 }
             .offset(x: offset)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            // minWidth 0: sin esto el marco toma el ancho del texto entero y empuja
+            // todo el player hacia los costados.
+            .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
             .frame(height: height)
             .background(GeometryReader { proxy in
                 Color.clear
