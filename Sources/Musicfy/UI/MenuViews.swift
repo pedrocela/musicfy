@@ -101,3 +101,68 @@ private struct ModePictogram: View {
         }
     }
 }
+
+/// Playback in the "…" menu when the player is too small to show it: one card, shaped like
+/// the mode selector (254 wide), with shuffle, previous, play/pause, next and repeat.
+/// The menu stays open, so shuffle and repeat show their new state right away.
+struct MenuTransportView: View {
+    @ObservedObject var player: PlayerController
+
+    var body: some View {
+        let state = player.state
+        let playing = state?.isPlaying ?? false
+        let repeatMode = state?.repeatMode ?? .off
+        HStack(spacing: 2) {
+            MenuTransportButton(symbol: "shuffle", size: 13, active: state?.shuffle == true, help: "Shuffle") {
+                player.toggleShuffle()
+            }
+            MenuTransportButton(symbol: "backward.fill", size: 15, help: "Previous") { player.previous() }
+            MenuTransportButton(symbol: playing ? "pause.fill" : "play.fill", size: 19, help: "Play/Pause") {
+                player.playPause()
+            }
+            MenuTransportButton(symbol: "forward.fill", size: 15, help: "Next") { player.next() }
+            MenuTransportButton(
+                symbol: repeatMode == .one ? "repeat.1" : "repeat",
+                size: 13,
+                active: repeatMode != .off,
+                help: "Repeat"
+            ) { player.cycleRepeat() }
+        }
+        .padding(3)
+        .frame(width: 254, height: 40)
+        .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(Color.white.opacity(0.05)))
+        .padding(.horizontal, 5)
+        .padding(.vertical, 3)
+        .environment(\.colorScheme, .dark)
+    }
+}
+
+private struct MenuTransportButton: View {
+    let symbol: String
+    let size: CGFloat
+    var active: Bool? = nil
+    let help: String
+    let action: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: size, weight: .medium))
+                .foregroundStyle(Color.white)
+                .opacity(active == false && !hovering ? 0.55 : 1)
+                .frame(maxWidth: .infinity)
+                .frame(height: 34)
+                .background(
+                    RoundedRectangle(cornerRadius: 5, style: .continuous)
+                        .fill(Color.white.opacity(active == true ? 0.15 : hovering ? 0.06 : 0))
+                )
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(PressableStyle())
+        .help(help)
+        .onHover { hovering = $0 }
+        .animation(Theme.fade, value: hovering)
+        .animation(Theme.fade, value: active)
+    }
+}
