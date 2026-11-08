@@ -219,9 +219,31 @@ struct TransportRow: View {
         let state = player.state
         let playing = state?.isPlaying ?? false
         let kind = state?.source ?? .music
-        // Podcasts has no shuffle or repeat: the places stay, empty, so nothing shifts.
+        if kind.isSpokenWord {
+            spokenWord(kind: kind, playing: playing)
+        } else {
+            music(state: state, kind: kind, playing: playing)
+        }
+    }
+
+    /// Podcasts: back 15, play, ahead 30, as one centered group (no shuffle or repeat to
+    /// spread out). The jump glyphs carry numbers, so they're drawn a little larger and the
+    /// group stays tight around play, as in Podcasts' own player.
+    private func spokenWord(kind: SourceKind, playing: Bool) -> some View {
+        let jump = (skipSize * 1.12).rounded()
+        let gap = (playSize * (showsModes ? 0.9 : 0.6)).rounded()
+        return HStack(spacing: gap) {
+            IconButton(symbol: kind.previousSymbol, size: jump, help: kind.previousHelp, action: { player.previous() })
+            IconButton(symbol: playing ? "pause.fill" : "play.fill", size: playSize, help: "Play/Pause", action: { player.playPause() })
+            IconButton(symbol: kind.nextSymbol, size: jump, help: kind.nextHelp, action: { player.next() })
+        }
+        .frame(maxWidth: .infinity)
+        .frame(height: rowHeight)
+    }
+
+    private func music(state: PlayerState?, kind: SourceKind, playing: Bool) -> some View {
         let modes = kind.hasPlayModes
-        HStack(spacing: 0) {
+        return HStack(spacing: 0) {
             if showsModes {
                 IconButton(
                     symbol: "shuffle",

@@ -106,9 +106,40 @@ struct PlayerState: Equatable {
     var artworkTag: String = ""
 
     var subtitle: String {
-        // A podcast's show is often both the artist and the album.
+        if source == .podcasts { return podcastSubtitle }
         let parts = album.caseInsensitiveCompare(artist) == .orderedSame ? [artist] : [artist, album]
         return parts.filter { !$0.isEmpty }.joined(separator: " — ")
+    }
+
+    /// Podcasts reports the show as the artist and the episode's date as the album
+    /// ("6 November 2026"): the show, then a short date ("6 Nov", with the year only if
+    /// it isn't this one). Anything else in the album is left out.
+    private var podcastSubtitle: String {
+        let show = artist.isEmpty ? album : artist
+        guard !artist.isEmpty, let date = Self.episodeDate(album) else { return show }
+        let sameYear = Calendar.current.isDate(date, equalTo: Date(), toGranularity: .year)
+        let style = Date.FormatStyle().day().month(.abbreviated)
+        return "\(show) · " + (sameYear ? date.formatted(style) : date.formatted(style.year()))
+    }
+
+    private static func episodeDate(_ text: String) -> Date? {
+        guard !text.isEmpty, text.rangeOfCharacter(from: .decimalDigits) != nil else { return nil }
+        for locale in [Locale.current, Locale(identifier: "en_US_POSIX")] {
+            for style in [DateFormatter.Style.long, .medium, .full] {
+                let formatter = DateFormatter()
+                formatter.locale = locale
+                formatter.dateStyle = style
+                formatter.timeStyle = .none
+                if let date = formatter.date(from: text) { return date }
+            }
+            let formatter = DateFormatter()
+            formatter.locale = locale
+            for format in ["d MMMM yyyy", "MMMM d, yyyy", "d MMM yyyy", "MMM d, yyyy"] {
+                formatter.dateFormat = format
+                if let date = formatter.date(from: text) { return date }
+            }
+        }
+        return nil
     }
 
     /// Identifies the song, to know when to fetch new artwork or lyrics.
