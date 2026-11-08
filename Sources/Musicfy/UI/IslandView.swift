@@ -50,9 +50,13 @@ struct IslandView: View {
             // The shadow comes from a plain shape behind the pill (the tint above covers it).
             // A shadow of the pill itself is redrawn every time anything inside it moves.
             .background(
+                // Two layers, like a cover lifted off the desk: a soft one that stays inside the
+                // window's margin (a bigger blur got cut off at the window's edge and looked
+                // square), and a tight one that hugs the 6 pt corners.
                 shape
                     .fill(Color.black)
-                    .shadow(color: .black.opacity(expanded ? 0.32 : 0.22), radius: expanded ? 20 : 10, y: expanded ? 10 : 4)
+                    .shadow(color: .black.opacity(expanded ? 0.26 : 0.16), radius: expanded ? 14 : 8, y: expanded ? 8 : 3)
+                    .shadow(color: .black.opacity(expanded ? 0.22 : 0.18), radius: expanded ? 3 : 2, y: 1)
             )
             .scaleEffect(1 + 0.08 * panel.islandPull, anchor: .top)
             .animation(Theme.islandSpring, value: expanded)
