@@ -125,7 +125,7 @@ final class MusicSource: MediaSource {
         \treturn {mfSt, mfNm, mfAr, mfAl, mfDu, mfPos, mfTid, sound volume, shuffle enabled, mfRp, mfFav, ""}
         end tell
         """
-    }
+    }()
 
     private let artworkScript = """
         if application id "com.apple.Music" is not running then return missing value
