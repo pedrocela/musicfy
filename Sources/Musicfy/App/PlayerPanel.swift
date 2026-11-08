@@ -13,7 +13,9 @@ final class PlayerPanel: NSPanel {
         )
         isFloatingPanel = true
         level = .floating
-        collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
+        // Managed: it joins the Mission Control spread like any window (stationary kept it
+        // frozen in place). Still on every Space and over full-screen apps.
+        collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .managed, .ignoresCycle]
         hidesOnDeactivate = false
         isOpaque = false
         backgroundColor = .clear
