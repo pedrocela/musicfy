@@ -1,4 +1,5 @@
 import AppKit
+import Carbon.HIToolbox
 import Combine
 import SwiftUI
 
@@ -43,6 +44,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     // Cambio de tamaño desde los bordes.
     private var resizeStartFrame = NSRect.zero
     private var resizeStartSide: CGFloat = 0
+    private var hideHotKey: HotKey?
 
     var isPanelVisible: Bool { panel?.isVisible ?? false }
 
@@ -81,6 +83,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
         setUpStatusItem()
         observe()
+        // ⌥⌘M desde cualquier app: muestra o esconde el player.
+        hideHotKey = HotKey(keyCode: kVK_ANSI_M, modifiers: cmdKey | optionKey, id: 1) { [weak self] in
+            self?.togglePanel()
+        }
 
         panelModel.mode = settings.mode
         placePanel(for: settings.mode)
@@ -305,7 +311,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     /// Cambio de modo pedido con un gesto (tirar de un borde, soltar arriba, bajar la Isla).
-    private func userSwitch(to mode: DisplayMode) {
+    func userSwitch(to mode: DisplayMode) {
         if !isPlaying { userOverrodeIdle = true }
         if settings.mode == mode {
             idleCompact = false

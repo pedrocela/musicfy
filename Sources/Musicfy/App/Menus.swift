@@ -1,5 +1,6 @@
 import AppKit
 import ServiceManagement
+import SwiftUI
 
 /// NSMenuItem con un bloque en vez de target/selector.
 final class BlockMenuItem: NSMenuItem {
@@ -43,29 +44,68 @@ extension NSMenu {
 
 @MainActor
 enum Menus {
+    /// El menú de los tres puntos, del clic derecho y de la barra de menú.
+    /// Arriba, los tres modos con su dibujito; después lo del tema; los botones a la vista;
+    /// y al final lo de la app.
     static func main(app: AppDelegate) -> NSMenu {
         let menu = NSMenu()
+        menu.appearance = NSAppearance(named: .darkAqua)
+        menu.minimumWidth = 320
         let player = app.player
         let settings = app.settings
 
+        // Modos.
+        let cards = ModeCardsView(
+            current: app.panelModel.mode == .island ? .island : settings.mode,
+            accent: Color(nsColor: player.palette.accent),
+            choose: { [weak menu] mode in
+                menu?.cancelTracking()
+                app.userSwitch(to: mode)
+            }
+        )
+        menu.addItem(viewItem(cards))
+        // ⌘1, ⌘2, ⌘3 con el menú abierto.
+        for (index, mode) in DisplayMode.allCases.enumerated() {
+            let item = menu.add(mode.label, key: "\(index + 1)") { app.userSwitch(to: mode) }
+            item.isHidden = true
+            item.allowsKeyEquivalentWhenHidden = true
+        }
+        menu.addItem(.separator())
+
+        // El tema.
         if let state = player.state {
-            menu.addHeader(state.title.isEmpty ? "Sonando en \(state.source.displayName)" : "\(state.title) · \(state.source.displayName)")
-            menu.add("Abrir \(state.source.displayName)") { player.open(state.source) }
+            if state.source.supportsFavorite {
+                let like = menu.add("Me gusta", key: "l") { player.toggleFavorite() }
+                like.image = symbol(state.favorited ? "star.fill" : "star")
+            }
+            menu.add("Mostrar en \(state.source.displayName)") { player.open(state.source) }
+                .image = symbol("arrow.up.forward.app")
+            menu.add("Copiar enlace del tema") {
+                Task {
+                    guard let url = await TrackLink.url(for: state) else { NSSound.beep(); return }
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(url.absoluteString, forType: .string)
+                }
+            }
+            .image = symbol("link")
             menu.addItem(.separator())
         }
 
-        menu.add(app.isPanelVisible ? "Esconder player" : "Mostrar player") { app.togglePanel() }
+        // Botones a la vista.
+        menu.addItem(viewItem(VisibleButtonsView(settings: settings)))
+        menu.addItem(.separator())
+
+        menu.add("Achicar al pausar", checked: settings.idleBehavior == .compact) {
+            settings.idleBehavior = settings.idleBehavior == .compact ? .stay : .compact
+        }
+        let hide = menu.add(app.isPanelVisible ? "Esconder Musicfy" : "Mostrar Musicfy", key: "m") { app.togglePanel() }
+        hide.keyEquivalentModifierMask = [.command, .option]
+        menu.addItem(.separator())
 
         menu.addSubmenu("Salida de audio") { sub in
             let current = AudioOutputs.current
             for device in AudioOutputs.all() {
                 sub.add(device.name, checked: device.id == current) { AudioOutputs.select(device.id) }
-            }
-        }
-
-        menu.addSubmenu("Modo") { sub in
-            for mode in DisplayMode.allCases {
-                sub.add(mode.label, checked: settings.mode == mode) { settings.mode = mode }
             }
         }
         menu.addSubmenu("Qué app mostrar") { sub in
@@ -75,19 +115,6 @@ enum Menus {
                 sub.add("Siempre \(kind.displayName)", checked: settings.forcedSource == kind) { settings.forcedSource = kind }
             }
         }
-        menu.addSubmenu("Botones") { sub in
-            sub.add("Letras", checked: settings.showLyricsButton) { settings.showLyricsButton.toggle() }
-            sub.add("A continuación", checked: settings.showQueueButton) { settings.showQueueButton.toggle() }
-            sub.add("Volumen", checked: settings.showVolume) { settings.showVolume.toggle() }
-            sub.add("Salida de audio", checked: settings.showOutput) { settings.showOutput.toggle() }
-        }
-        menu.addSubmenu("Cuando no suena nada") { sub in
-            for behavior in IdleBehavior.allCases {
-                sub.add(behavior.label, checked: settings.idleBehavior == behavior) { settings.idleBehavior = behavior }
-            }
-        }
-
-        menu.addItem(.separator())
         let login = SMAppService.mainApp
         menu.add("Abrir al iniciar sesión", checked: login.status == .enabled) {
             do {
@@ -103,6 +130,18 @@ enum Menus {
         menu.addItem(.separator())
         menu.add("Salir de Musicfy", key: "q") { NSApp.terminate(nil) }
         return menu
+    }
+
+    private static func viewItem<V: View>(_ view: V) -> NSMenuItem {
+        let hosting = NSHostingView(rootView: view)
+        hosting.frame = NSRect(origin: .zero, size: hosting.fittingSize)
+        let item = NSMenuItem()
+        item.view = hosting
+        return item
+    }
+
+    private static func symbol(_ name: String) -> NSImage? {
+        NSImage(systemSymbolName: name, accessibilityDescription: nil)
     }
 
     static func output() -> NSMenu {
