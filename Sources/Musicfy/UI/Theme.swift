@@ -31,8 +31,9 @@ enum Theme {
     static let islandThumb: CGFloat = 32
     static let islandThumbInset: CGFloat = 6
     static let islandThumbRadius: CGFloat = 3
-    /// The Island window leaves room for the shadow around the open pill.
-    static let islandShadowMargin: CGFloat = 24
+    /// The Island window leaves room for the shadow around the open pill (sides and top;
+    /// 1.5 × below). Keep the shadow's blur + offset inside it, or it's cut off square.
+    static let islandShadowMargin: CGFloat = 32
     /// Gap between the menu bar and the Island.
     static let islandTopGap: CGFloat = 8
     /// Dragging the player to the top: it's armed to become the Island when its center is
