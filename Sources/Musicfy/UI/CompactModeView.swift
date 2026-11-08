@@ -65,16 +65,16 @@ struct CompactModeView: View {
                             player: player,
                             settings: settings,
                             panel: panel,
-                            modeSwitch: .artwork,
                             iconSize: 13,
-                            cell: 26,
-                            tint: Color.white.opacity(0.85)
+                            cell: 24,
+                            tint: Color.white.opacity(0.85),
+                            includesOutput: false
                         )
                         Button(action: panel.actions.showMenu) {
                             Image(systemName: "ellipsis")
                                 .font(.system(size: 13, weight: .semibold))
                                 .foregroundStyle(Color.white.opacity(0.85))
-                                .frame(width: 26, height: 26)
+                                .frame(width: 24, height: 24)
                                 .contentShape(Rectangle())
                         }
                         .buttonStyle(PressableStyle())

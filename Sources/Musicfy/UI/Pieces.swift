@@ -152,6 +152,8 @@ struct ToolbarIcons: View {
     var iconSize: CGFloat = 15
     var cell: CGFloat = 32
     var tint: Color = Theme.primary
+    /// En el compacto no entra todo: la salida de audio queda en el menú.
+    var includesOutput = true
 
     var body: some View {
         HStack(spacing: 0) {
@@ -169,7 +171,7 @@ struct ToolbarIcons: View {
                     panel.drawer = panel.drawer == .queue ? .none : .queue
                 }
             }
-            if settings.showOutput {
+            if settings.showOutput, includesOutput {
                 icon("airplayaudio", "Salida de audio") { panel.actions.showOutputMenu() }
             }
             if settings.showVolume {

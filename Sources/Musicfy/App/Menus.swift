@@ -56,6 +56,13 @@ enum Menus {
 
         menu.add(app.isPanelVisible ? "Esconder player" : "Mostrar player") { app.togglePanel() }
 
+        menu.addSubmenu("Salida de audio") { sub in
+            let current = AudioOutputs.current
+            for device in AudioOutputs.all() {
+                sub.add(device.name, checked: device.id == current) { AudioOutputs.select(device.id) }
+            }
+        }
+
         menu.addSubmenu("Modo") { sub in
             for mode in DisplayMode.allCases {
                 sub.add(mode.label, checked: settings.mode == mode) { settings.mode = mode }
