@@ -137,6 +137,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         .sink { [weak self] in self?.wakeMousePolling() }
         .store(in: &cancellables)
 
+        // Over full-screen apps and videos, only if asked.
+        settings.$showOverFullScreen
+            .receive(on: RunLoop.main)
+            .sink { [weak self] show in self?.panel.showsOverFullScreen = show }
+            .store(in: &cancellables)
+
         // The mode chosen in Settings.
         settings.$mode
             .dropFirst()

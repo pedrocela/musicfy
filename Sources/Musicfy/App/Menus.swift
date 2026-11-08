@@ -142,6 +142,9 @@ enum Menus {
         menu.add("Shrink When Paused", checked: settings.idleBehavior == .compact) {
             settings.idleBehavior = settings.idleBehavior == .compact ? .stay : .compact
         }
+        menu.add("Show Over Full Screen", checked: settings.showOverFullScreen) {
+            settings.showOverFullScreen.toggle()
+        }
         let login = SMAppService.mainApp
         menu.add("Open at Login", checked: login.status == .enabled) {
             do {

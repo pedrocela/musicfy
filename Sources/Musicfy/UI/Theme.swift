@@ -65,11 +65,11 @@ enum Theme {
     static let windowStroke = Color.white.opacity(0.12)
     static let islandStroke = Color.white.opacity(0.09)
 
-    // MARK: Each app's color (the chip's dot)
+    // MARK: Each app's color (the source glyph)
     static func sourceColor(_ kind: SourceKind) -> Color {
         switch kind {
-        case .music: return Color(red: 1.0, green: 0.353, blue: 0.447)
-        case .spotify: return Color(red: 0.118, green: 0.843, blue: 0.376)
+        case .music: return Color(red: 0.980, green: 0.176, blue: 0.282) // #FA2D48
+        case .spotify: return Color(red: 0.118, green: 0.843, blue: 0.376) // #1ED760
         }
     }
 
@@ -102,9 +102,9 @@ enum Theme {
 
 /// How much artwork mode shows on hover, by size. Everything dropped is still in the menu.
 enum ArtworkDensity: Comparable {
-    /// 250 and below: chip as a dot, only lyrics and volume up top, times on hover.
+    /// 250 and below: only lyrics and volume up top, times on hover.
     case minimal
-    /// 250 to 300: chip as a dot, no audio output or mode button, no favorite star.
+    /// 250 to 300: no audio output or mode button, no favorite star.
     case reduced
     /// 300 and up: everything.
     case full

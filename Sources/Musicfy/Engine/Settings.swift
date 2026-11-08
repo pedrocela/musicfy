@@ -30,6 +30,8 @@ final class Settings: ObservableObject {
     @Published var showLyricsButton: Bool { didSet { defaults.set(showLyricsButton, forKey: "showLyricsButton") } }
     @Published var showQueueButton: Bool { didSet { defaults.set(showQueueButton, forKey: "showQueueButton") } }
     @Published var idleBehavior: IdleBehavior { didSet { defaults.set(idleBehavior.rawValue, forKey: "idleBehavior") } }
+    /// Off by default: a full-screen video or app has the screen to itself.
+    @Published var showOverFullScreen: Bool { didSet { defaults.set(showOverFullScreen, forKey: "showOverFullScreen") } }
 
     init() {
         defaults.register(defaults: [
@@ -39,6 +41,7 @@ final class Settings: ObservableObject {
             "showLyricsButton": true,
             "showQueueButton": true,
             "idleBehavior": IdleBehavior.compact.rawValue,
+            "showOverFullScreen": false,
         ])
         mode = DisplayMode(rawValue: defaults.string(forKey: "mode") ?? "") ?? .artwork
         forcedSource = defaults.string(forKey: "forcedSource").flatMap(SourceKind.init(rawValue:))
@@ -47,5 +50,6 @@ final class Settings: ObservableObject {
         showLyricsButton = defaults.bool(forKey: "showLyricsButton")
         showQueueButton = defaults.bool(forKey: "showQueueButton")
         idleBehavior = IdleBehavior(rawValue: defaults.string(forKey: "idleBehavior") ?? "") ?? .compact
+        showOverFullScreen = defaults.bool(forKey: "showOverFullScreen")
     }
 }

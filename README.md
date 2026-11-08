@@ -1,8 +1,8 @@
 # Musicfy
 
 A floating player for **Music and Spotify** on macOS. Always in view: above every
-window, on every Space and over full-screen apps too. It shows whatever is playing
-in either app.
+window and on every Space. It stays out of full-screen apps and videos unless you turn
+on "Show Over Full Screen". It shows whatever is playing in either app.
 
 ## Modes
 
@@ -12,7 +12,7 @@ in either app.
 | **Compact** | 320 × 136 | Thumbnail, title, time and controls. The background takes the artwork's color. |
 | **Island** | 300 × 44 | A pill at the top center of the screen, tinted like compact. It opens downward on hover. |
 
-- Small artwork shows less: under 300 the chip turns into a dot and the audio output and
+- Small artwork shows less: under 300 the audio output and
   mode buttons step aside; under 250 only lyrics and volume stay up top, and the times
   appear when you point at the bar. Everything is still in the menu.
 - **Resize** artwork from any corner or side. Push its top or bottom edge in to turn it
@@ -22,7 +22,7 @@ in either app.
 - **Double click** an empty area: switch between artwork and compact.
 - **Right click** the player, or click the menu bar icon: the menu (⌘1, ⌘2, ⌘3 pick a mode).
 - **⌥⌘M** from any app: show or hide the player.
-- Click the **app chip** (● Music / ● Spotify) to bring that app to the front.
+- The **app glyph** (Music's pink note or Spotify's green disc) shows which app is playing; click it to bring that app to the front.
 - When nothing plays, artwork shrinks to compact and comes back when music starts
   (turn it off with "Shrink When Paused").
 

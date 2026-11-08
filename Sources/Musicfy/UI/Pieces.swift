@@ -1,87 +1,90 @@
 import SwiftUI
 
-// MARK: - App chip
+// MARK: - Source glyph
 
-/// "● Music" / "● Spotify". On glass over the artwork, or plain in compact.
+/// Which app is playing, as a glyph: Music's pink note or Spotify's green disc.
+/// Over the artwork it sits in a 28 pt glass circle; in compact it stands alone.
 /// Clicking it brings the app to the front.
 struct SourceChip: View {
     enum Style { case glass, plain }
     let kind: SourceKind
     var style: Style = .glass
-    /// False in small artwork: just the dot, in a glass circle.
-    var showsName = true
-    /// For artwork mode's glass and for opening the app.
     @ObservedObject var player: PlayerController
     @Environment(\.uiScale) private var scale
     @State private var hovering = false
 
     var body: some View {
-        if showsName {
-            named
-        } else {
-            dot
-        }
-    }
-
-    private var dot: some View {
         Button { player.open(kind) } label: {
-            ZStack {
-                Circle()
-                    .fill(Theme.sourceColor(kind))
-                    .frame(width: 8 * scale, height: 8 * scale)
-                    .opacity(hovering ? 0 : 1)
-                Image(systemName: "arrow.up.forward")
-                    .font(.system(size: 10 * scale, weight: .bold))
-                    .foregroundStyle(Theme.primary)
-                    .opacity(hovering ? 1 : 0)
-                    .scaleEffect(hovering ? 1 : 0.6)
-            }
-            .frame(width: 26 * scale, height: 26 * scale)
-            .background(
-                GlassBackdrop(player: player, shape: Circle())
-                    .overlay(Circle().fill(Color.white.opacity(hovering ? 0.08 : 0)))
-            )
-            .contentShape(Circle())
-        }
-        .buttonStyle(PressableStyle())
-        .help("Open \(kind.displayName)")
-        .onHover { hovering = $0 }
-        .animation(Theme.fade, value: hovering)
-        .animation(Theme.crossfade, value: kind)
-    }
-
-    private var named: some View {
-        Button { player.open(kind) } label: {
-            HStack(spacing: (style == .glass ? 6 : 5) * scale) {
-                Circle()
-                    .fill(Theme.sourceColor(kind))
-                    .frame(width: (style == .glass ? 7 : 6) * scale, height: (style == .glass ? 7 : 6) * scale)
-                Text(kind.displayName)
-                    .font(style == .glass ? Font.system(size: 12 * scale, weight: .semibold) : Font.system(size: 11, weight: .semibold))
-                    .foregroundStyle(style == .glass ? Theme.primary : Color.white.opacity(hovering ? 1 : 0.78))
-                    .contentTransition(.opacity)
-                if hovering {
-                    Image(systemName: "arrow.up.forward")
-                        .font(.system(size: (style == .glass ? 9 : 8) * scale, weight: .bold))
-                        .foregroundStyle(Color.white.opacity(0.7))
-                        .transition(.opacity.combined(with: .scale(scale: 0.6, anchor: .leading)))
-                }
-            }
-            .padding(.horizontal, style == .glass ? 10 * scale : 0)
-            .frame(height: style == .glass ? 26 * scale : nil)
-            .background {
+            Group {
                 if style == .glass {
-                    GlassBackdrop(player: player, shape: Capsule())
-                        .overlay(Capsule().fill(Color.white.opacity(hovering ? 0.08 : 0)))
+                    SourceGlyph(kind: kind, size: 16 * scale)
+                        .frame(width: 28 * scale, height: 28 * scale)
+                        .background(
+                            GlassBackdrop(player: player, shape: Circle())
+                                .overlay(Circle().fill(Color.white.opacity(hovering ? 0.08 : 0)))
+                                .overlay(Circle().strokeBorder(Color.white.opacity(0.22), lineWidth: 0.5))
+                        )
+                        .contentShape(Circle())
+                } else {
+                    SourceGlyph(kind: kind, size: 16)
+                        .frame(width: 20, height: 20)
+                        .opacity(hovering ? 1 : 0.92)
+                        .contentShape(Rectangle())
                 }
             }
-            .contentShape(Capsule())
+            .id(kind)
+            .transition(.opacity)
         }
         .buttonStyle(PressableStyle())
-        .help("Open \(kind.displayName)")
+        .help("Playing in \(kind.displayName)")
         .onHover { hovering = $0 }
         .animation(Theme.fade, value: hovering)
         .animation(Theme.crossfade, value: kind)
+    }
+}
+
+/// The glyph itself. Music: a note in its pink. Spotify: a green disc with three dark waves.
+struct SourceGlyph: View {
+    let kind: SourceKind
+    let size: CGFloat
+
+    var body: some View {
+        switch kind {
+        case .music:
+            Image(systemName: "music.note")
+                .font(.system(size: size, weight: .semibold))
+                .foregroundStyle(Theme.sourceColor(.music))
+        case .spotify:
+            let side = size * 17 / 16
+            ZStack {
+                Circle().fill(Theme.sourceColor(.spotify))
+                SpotifyWaves()
+                    .stroke(Color.black.opacity(0.85), style: StrokeStyle(lineWidth: side * 0.09, lineCap: .round))
+            }
+            .frame(width: side, height: side)
+        }
+    }
+}
+
+/// Three arcs, widest on top, slightly tilted, as in Spotify's mark.
+private struct SpotifyWaves: Shape {
+    func path(in rect: CGRect) -> Path {
+        let w = rect.width, h = rect.height
+        var path = Path()
+        // (vertical position, half width, how much the arc bows, tilt)
+        let waves: [(CGFloat, CGFloat, CGFloat, CGFloat)] = [
+            (0.34, 0.30, 0.10, 0.03),
+            (0.52, 0.25, 0.08, 0.025),
+            (0.69, 0.20, 0.06, 0.02),
+        ]
+        for (y, half, bow, tilt) in waves {
+            let start = CGPoint(x: (0.5 - half) * w, y: (y + tilt) * h)
+            let end = CGPoint(x: (0.5 + half) * w, y: (y + tilt * 0.4) * h)
+            let control = CGPoint(x: 0.5 * w, y: (y - bow) * h)
+            path.move(to: start)
+            path.addQuadCurve(to: end, control: control)
+        }
+        return path
     }
 }
 

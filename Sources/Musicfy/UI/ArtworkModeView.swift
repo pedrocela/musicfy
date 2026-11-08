@@ -39,7 +39,7 @@ struct ArtworkModeView: View {
         VStack(spacing: 0) {
             HStack {
                 if let kind = player.state?.source {
-                    SourceChip(kind: kind, showsName: density == .full, player: player)
+                    SourceChip(kind: kind, player: player)
                 }
                 Spacer(minLength: 8)
                 if hasTopButtons(density) {
