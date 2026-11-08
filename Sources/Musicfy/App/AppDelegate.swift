@@ -47,6 +47,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     // Dragging the window (dropping it at the top center turns it into the Island).
     private var draggingWindow = false
     private var dragStartAnchor: NSPoint?
+    private let islandGhost = IslandGhost()
     // Resizing from the edges.
     private var resizeStartFrame = NSRect.zero
     private var resizeStartSide: CGFloat = 0
@@ -708,10 +709,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     // MARK: - Dragging between modes
 
     /// The Island zone: top center of the screen with the menu bar.
-    private func isInIslandZone(_ point: NSPoint) -> Bool {
-        guard let screen = NSScreen.screens.first else { return false }
-        let visible = screen.visibleFrame
-        return point.y > visible.maxY - 64 && point.y <= screen.frame.maxY && abs(point.x - visible.midX) < 200
+    /// Where the closed Island sits when it's centered.
+    private var centeredPillRect: NSRect {
+        let visible = (NSScreen.screens.first ?? NSScreen.main!).visibleFrame
+        let size = Theme.islandCollapsed
+        return NSRect(
+            x: visible.midX - size.width / 2,
+            y: visible.maxY - Theme.islandTopGap - size.height,
+            width: size.width,
+            height: size.height
+        )
     }
 
     /// Called by the drag area when the mouse goes down on the artwork or compact view.
@@ -721,10 +728,44 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         dragStartAnchor = anchor
     }
 
+    /// Every step of a window drag (the drag runs its own event loop): where the window
+    /// goes. It stays on screen; near the top center an outline of the Island appears,
+    /// and once the window's top reaches the top edge there it's armed and pulled toward
+    /// the center, so letting go turns it into the Island.
+    func windowDragged(to proposed: NSRect, mouse: NSPoint) -> NSPoint {
+        var frame = keptOnScreen(proposed, near: mouse)
+        guard draggingWindow, let islandScreen = NSScreen.screens.first else { return frame.origin }
+        let pill = centeredPillRect
+        let top = islandScreen.visibleFrame.maxY - Theme.screenMargin
+        let onIslandScreen = NSMouseInRect(mouse, islandScreen.frame, false)
+        let offCenter = abs(proposed.midX - pill.midX)
+        let belowTop = max(0, top - proposed.maxY)
+        let armed = onIslandScreen
+            && offCenter < Theme.islandSnapWidth
+            && belowTop < Theme.islandSnapDepth
+        if armed {
+            // A light magnetic pull toward the center.
+            let centeredX = pill.midX - frame.width / 2
+            frame.origin.x += (centeredX - frame.origin.x) * 0.5
+        }
+        let distance = (offCenter * offCenter + belowTop * belowTop).squareRoot()
+        let closeness = onIslandScreen ? max(0, 1 - distance / 360) : 0
+        if closeness > 0 || armed {
+            islandGhost.show(at: pill, closeness: closeness, armed: armed)
+        } else {
+            islandGhost.hide()
+        }
+        if armed != panelModel.islandHint {
+            withAnimation(Theme.smooth) { panelModel.islandHint = armed }
+        }
+        return frame.origin
+    }
+
     /// On release: if it's at the top center, it becomes the Island.
     func windowDragEnded() {
         guard draggingWindow else { return }
         draggingWindow = false
+        islandGhost.hide()
         guard panelModel.islandHint else { return }
         // The panel goes back to where it was before the drag when it leaves the Island.
         if let start = dragStartAnchor { anchor = start }
@@ -732,21 +773,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         userSwitch(to: .island)
     }
 
-    /// Called on every step of a window drag (the drag runs its own event loop).
-    func windowDragMoved(mouse: NSPoint) {
-        trackWindowDrag(mouse: mouse)
-    }
-
+    /// Safety net: a drag whose mouse-up got lost still ends.
     private func trackWindowDrag(mouse: NSPoint) {
-        guard draggingWindow else { return }
-        if NSEvent.pressedMouseButtons & 1 == 0 {
-            windowDragEnded()
-            return
-        }
-        let hint = isInIslandZone(mouse)
-        if hint != panelModel.islandHint {
-            withAnimation(Theme.smooth) { panelModel.islandHint = hint }
-        }
+        guard draggingWindow, NSEvent.pressedMouseButtons & 1 == 0 else { return }
+        windowDragEnded()
     }
 
     /// The Island is being pulled down: it follows the mouse.
