@@ -215,10 +215,10 @@ private struct ProgressRing: View {
                         .frame(width: 9, height: 10)
                         .transition(.opacity.combined(with: .scale(scale: 0.5)))
                 } else {
-                    Image(systemName: "play.fill")
-                        .font(.system(size: 8, weight: .bold))
-                        .foregroundStyle(Theme.secondary)
-                        .offset(x: 0.5)
+                    PlayTriangle()
+                        .fill(Theme.secondary)
+                        .frame(width: PlayTriangle.width, height: PlayTriangle.height)
+                        .offset(x: PlayTriangle.opticalShift)
                         .transition(.opacity.combined(with: .scale(scale: 0.5)))
                 }
             }
@@ -227,6 +227,33 @@ private struct ProgressRing: View {
         .frame(width: 22, height: 22)
         .animation(Theme.crossfade, value: playing)
         .allowsHitTesting(false)
+    }
+}
+
+/// The play glyph of the closed Island, drawn by hand so it sits dead center in the ring.
+///
+/// The SF Symbol carries its own side bearing, which pushed it 1.5 pt to the right at
+/// this size. Here the box is centered and then nudged right by half the gap between the
+/// box's center and the triangle's centroid: the eye reads that as centered, as in Music.
+private struct PlayTriangle: Shape {
+    static let width: CGFloat = 7.5
+    static let height: CGFloat = 8.5
+    static let opticalShift: CGFloat = width / 12
+    private static let cornerRadius: CGFloat = 1.3
+
+    func path(in rect: CGRect) -> Path {
+        let a = CGPoint(x: rect.minX, y: rect.minY)
+        let b = CGPoint(x: rect.maxX, y: rect.midY)
+        let c = CGPoint(x: rect.minX, y: rect.maxY)
+        let r = Self.cornerRadius
+        var path = Path()
+        // Start halfway down the flat side so every corner gets the same rounding.
+        path.move(to: CGPoint(x: rect.minX, y: rect.midY))
+        path.addArc(tangent1End: a, tangent2End: b, radius: r)
+        path.addArc(tangent1End: b, tangent2End: c, radius: r)
+        path.addArc(tangent1End: c, tangent2End: a, radius: r)
+        path.closeSubpath()
+        return path
     }
 }
 
