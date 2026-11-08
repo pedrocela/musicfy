@@ -26,7 +26,6 @@ struct RootView: View {
                     .transition(.opacity)
             }
         }
-        .environment(\.colorScheme, .dark)
     }
 
     /// The player's height, read from the window itself rather than from the model: while
@@ -118,7 +117,7 @@ struct RootView: View {
     /// Lyrics or queue, below the player.
     private var drawer: some View {
         ZStack {
-            Color.black.opacity(0.1)
+            Theme.drawerWash
             WindowDragArea(onDoubleClick: { panel.drawer = .none })
             switch panel.drawer {
             case .lyrics: LyricsPanel(player: player).transition(.opacity)
@@ -128,7 +127,7 @@ struct RootView: View {
         }
         .frame(height: Theme.drawerHeight)
         .overlay(alignment: .top) {
-            Rectangle().fill(Color.white.opacity(0.08)).frame(height: 0.5)
+            Rectangle().fill(Theme.separator).frame(height: 0.5)
         }
         .animation(Theme.fade, value: panel.drawer)
     }
@@ -171,7 +170,7 @@ struct MorphView: View, Animatable {
             ZStack(alignment: .topLeading) {
                 // The Island wears the same artwork tint as compact: from compact the
                 // background stays; from artwork it fades in as the cover shrinks.
-                Color(nsColor: player.palette.background)
+                Color(nsColor: player.palette.backdrop)
                     .opacity(look == .compact ? 1 : Double(min(1, p * 1.6)))
                 ArtworkFill(image: player.artwork)
                     .frame(width: thumb.width, height: thumb.height)
@@ -182,7 +181,7 @@ struct MorphView: View, Animatable {
             .clipShape(RoundedRectangle(cornerRadius: Theme.cornerRadius, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: Theme.cornerRadius, style: .continuous)
-                    .strokeBorder(Color.white.opacity(0.1), lineWidth: 0.5)
+                    .strokeBorder(Theme.windowStroke, lineWidth: 0.5)
             )
         }
         .allowsHitTesting(false)

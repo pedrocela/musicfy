@@ -213,7 +213,7 @@ struct TransportRow: View {
     private var playSize: CGFloat { metrics?.play ?? size.play }
     private var rowHeight: CGFloat { metrics?.transportHeight ?? size.height * scale }
     /// Shuffle and repeat when off.
-    private var modeOff: Color { Color.white.opacity(metrics == nil ? 0.5 : 0.6) }
+    private var modeOff: Color { Theme.ink.opacity(metrics == nil ? 0.5 : 0.6) }
 
     var body: some View {
         let state = player.state
@@ -382,7 +382,7 @@ struct GlassCapsule: View {
                 HStack(spacing: 6 * m.ratio) {
                     Button { panel.volumeOpen = false } label: {
                         TopBarIcon(symbol: "speaker.wave.2", nudge: 1)
-                            .foregroundStyle(Theme.primary)
+                            .foregroundStyle(Theme.capsuleIconHover)
                             .frame(width: m.buttonWidth, height: m.capsuleHeight)
                             .contentShape(Rectangle())
                     }
@@ -404,16 +404,17 @@ struct GlassCapsule: View {
         }
         .padding(.horizontal, 3)
         .frame(height: m.capsuleHeight)
+        // Follows the color scheme it's given: dark glass with white glyphs, or (light
+        // mode, as Music's mini player) milky glass with dark glyphs.
         .background(
             ZStack {
                 shape.fill(.ultraThinMaterial)
-                shape.fill(Color.black.opacity(0.42))
+                shape.fill(Theme.capsuleVeil)
             }
-            .environment(\.colorScheme, .dark)
         )
-        .overlay(shape.strokeBorder(Color.white.opacity(0.18), lineWidth: 0.5))
+        .overlay(shape.strokeBorder(Theme.capsuleStroke, lineWidth: 0.5))
         .clipShape(shape)
-        .shadow(color: .black.opacity(0.25), radius: 4, y: 2) // 0 2 8: blur 8 is radius 4
+        .shadow(color: Theme.capsuleShadow, radius: 4, y: 2) // 0 2 8: blur 8 is radius 4
         .opacity(shown ? 1 : 0)
         .offset(y: shown ? 0 : -2)
         .onAppear { withAnimation(.easeOut(duration: 0.22)) { shown = true } }
@@ -438,7 +439,7 @@ struct GlassCapsule: View {
             ForEach(Array(groups.enumerated()), id: \.offset) { index, group in
                 if index > 0 {
                     Rectangle()
-                        .fill(Color.white.opacity(0.16))
+                        .fill(Theme.capsuleDivider)
                         .frame(width: 1, height: 14 * m.ratio)
                         .padding(.horizontal, 4)
                 }
@@ -492,8 +493,9 @@ private struct TopBarIcon: View {
     }
 }
 
-/// One button in the top capsule: 28 × 24 with a 28 × 30 click area. At rest white 85 %;
-/// on hover a 12 % fill; pressed 18 % and 0.92 scale; active a white pill with a dark icon.
+/// One button in the top capsule: 28 × 24 with a 28 × 30 click area. Dark mode: at rest
+/// white 85 %; on hover a 12 % fill; pressed 18 % and 0.92 scale; active a white pill with
+/// a dark icon. Light mode mirrors it in dark ink (`Theme.capsule*`).
 private struct TopBarButton: View {
     let symbol: String
     var nudge: CGFloat = 0
@@ -526,14 +528,14 @@ private struct TopBarButton: View {
             let pill = RoundedRectangle(cornerRadius: m.buttonHeight / 2, style: .continuous)
             TopBarIcon(symbol: symbol, nudge: nudge)
                 .foregroundStyle(
-                    active ? Color(red: 0.102, green: 0.078, blue: 0.071) // #1A1412
-                        : Color.white.opacity(hovering || pressed ? 1 : 0.85)
+                    active ? Theme.capsuleActiveIcon
+                        : hovering || pressed ? Theme.capsuleIconHover : Theme.capsuleIcon
                 )
                 .frame(width: m.buttonWidth, height: m.buttonHeight)
                 .background(
                     pill.fill(
-                        active ? Color.white
-                            : Color.white.opacity(pressed ? 0.18 : hovering ? 0.12 : 0)
+                        active ? Theme.capsuleActive
+                            : pressed ? Theme.capsulePressed : hovering ? Theme.capsuleHover : Color.clear
                     )
                 )
                 .scaleEffect(pressed ? 0.92 : 1)
@@ -585,7 +587,7 @@ struct LyricsPanel: View {
     var body: some View {
         Group {
             if player.lyricsLoading {
-                ProgressView().controlSize(.small).tint(.white)
+                ProgressView().controlSize(.small).tint(Theme.primary)
             } else if let lyrics = player.lyrics, lyrics.isSynced {
                 PlaybackTimeline(clock: player.clock) { now in
                     SyncedLyrics(lines: lyrics.lines, current: lyrics.index(at: player.position(at: now) + 0.3))
@@ -619,10 +621,10 @@ struct PanelMessage: View {
         VStack(spacing: 6) {
             Text(title)
                 .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(Color.white.opacity(0.62))
+                .foregroundStyle(Theme.tertiary)
             Text(detail)
                 .font(.system(size: 13))
-                .foregroundStyle(Color.white.opacity(0.45))
+                .foregroundStyle(Theme.ink.opacity(0.45))
                 .multilineTextAlignment(.center)
         }
         .padding(.horizontal, 24)
@@ -720,12 +722,13 @@ struct EmptyStateView: View {
         let m = ArtworkMetrics(side: side)
         return ZStack {
             EmptyCover(sources: player.installedSources, noteScale: 0.30, noteOpacity: 0.16, noteLift: 0.08)
-            // The same veil the controls sit on.
+            // The same veil the controls sit on: dark under white text, or pale under dark
+            // text on the light cover.
             LinearGradient(
                 stops: [
-                    .init(color: .black.opacity(0), location: 0.40),
-                    .init(color: .black.opacity(0.18), location: 0.66),
-                    .init(color: .black.opacity(0.42), location: 1),
+                    .init(color: Theme.paper.opacity(0), location: 0.40),
+                    .init(color: Theme.paper.opacity(0.18), location: 0.66),
+                    .init(color: Theme.paper.opacity(0.42), location: 1),
                 ],
                 startPoint: .top,
                 endPoint: .bottom
@@ -748,7 +751,7 @@ struct EmptyStateView: View {
             .padding(.horizontal, m.sideMargin)
             .padding(.bottom, m.bottomMargin + 4)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .shadow(color: .black.opacity(0.16), radius: 5, y: 1)
+            .shadow(color: Theme.paper.opacity(0.16), radius: 5, y: 1)
         }
     }
 
@@ -757,8 +760,8 @@ struct EmptyStateView: View {
             EmptyCover(sources: player.installedSources)
                 .frame(width: Theme.compactArtSide, height: Theme.compactArtSide)
                 .clipShape(RoundedRectangle(cornerRadius: Theme.compactArtRadius, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: Theme.compactArtRadius, style: .continuous).strokeBorder(Color.white.opacity(0.12), lineWidth: 0.5))
-                .shadow(color: .black.opacity(0.3), radius: 8, y: 4)
+                .overlay(RoundedRectangle(cornerRadius: Theme.compactArtRadius, style: .continuous).strokeBorder(Theme.coverStroke, lineWidth: 0.5))
+                .shadow(color: Theme.coverShadow, radius: 8, y: 4)
             VStack(alignment: .leading, spacing: 0) {
                 Text("Nothing Playing")
                     .font(Theme.compactTitle)
@@ -798,7 +801,7 @@ struct EmptyStateView: View {
                     .clipShape(RoundedRectangle(cornerRadius: Theme.thumbRadius, style: .continuous))
                     .overlay(
                         RoundedRectangle(cornerRadius: Theme.thumbRadius, style: .continuous)
-                            .strokeBorder(Color.white.opacity(0.1), lineWidth: 0.5)
+                            .strokeBorder(Theme.coverStroke, lineWidth: 0.5)
                     )
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Nothing Playing")
@@ -863,7 +866,7 @@ struct EmptyIslandRow: View {
                 .clipShape(RoundedRectangle(cornerRadius: Theme.islandThumbRadius, style: .continuous))
                 .overlay(
                     RoundedRectangle(cornerRadius: Theme.islandThumbRadius, style: .continuous)
-                        .strokeBorder(Color.white.opacity(0.1), lineWidth: 0.5)
+                        .strokeBorder(Theme.coverStroke, lineWidth: 0.5)
                 )
             VStack(alignment: .leading, spacing: 0) {
                 Text("Nothing Playing")
@@ -872,7 +875,7 @@ struct EmptyIslandRow: View {
                     .frame(height: 16)
                 Text(EmptyStateView.detail(for: player.installedSources))
                     .font(Theme.islandSubtitle)
-                    .foregroundStyle(Color.white.opacity(0.55))
+                    .foregroundStyle(Theme.quaternary)
                     .lineLimit(1)
                     .frame(height: 14)
             }
@@ -888,9 +891,9 @@ struct EmptyIslandRow: View {
     }
 }
 
-/// The cover of nothing: graphite, lit faintly from opposite corners by each installed
-/// app's color (Music's pink from the top left, Spotify's green from the bottom right),
-/// with a note in the middle. Fills whatever frame it gets; static.
+/// The cover of nothing: graphite (silver in light mode), lit faintly from opposite corners
+/// by each installed app's color (Music's pink from the top left, Spotify's green from the
+/// bottom right), with a note in the middle. Fills whatever frame it gets; static.
 struct EmptyCover: View {
     let sources: [SourceKind]
     /// Note size relative to the shorter side, and how strongly it shows.
@@ -905,7 +908,10 @@ struct EmptyCover: View {
             let reach = max(geo.size.width, geo.size.height) * 0.95
             ZStack {
                 LinearGradient(
-                    colors: [Color(red: 0.20, green: 0.20, blue: 0.23), Color(red: 0.08, green: 0.08, blue: 0.09)],
+                    colors: [
+                        Theme.adaptive(dark: NSColor(srgbRed: 0.20, green: 0.20, blue: 0.23, alpha: 1), light: NSColor(srgbRed: 0.96, green: 0.96, blue: 0.97, alpha: 1)),
+                        Theme.adaptive(dark: NSColor(srgbRed: 0.08, green: 0.08, blue: 0.09, alpha: 1), light: NSColor(srgbRed: 0.84, green: 0.84, blue: 0.86, alpha: 1)),
+                    ],
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
                 )
@@ -927,10 +933,10 @@ struct EmptyCover: View {
                         center: .bottomLeading, startRadius: 0, endRadius: reach * 0.8
                     )
                 }
-                LinearGradient(colors: [Color.white.opacity(0.07), .clear], startPoint: .top, endPoint: .center)
+                LinearGradient(colors: [Theme.sheen, .clear], startPoint: .top, endPoint: .center)
                 Image(systemName: "music.note")
                     .font(.system(size: side * noteScale, weight: .medium))
-                    .foregroundStyle(Color.white.opacity(noteOpacity))
+                    .foregroundStyle(Theme.adaptive(dark: .white, light: NSColor(white: 0, alpha: 0.6)).opacity(noteOpacity))
                     .offset(y: -geo.size.height * noteLift)
             }
             .frame(width: geo.size.width, height: geo.size.height)
@@ -951,6 +957,11 @@ private struct SourceButton: View {
     let style: Style
     let action: () -> Void
     @State private var hovering = false
+
+    private static let veil = Theme.adaptive(dark: NSColor(white: 1, alpha: 0.12), light: NSColor(white: 1, alpha: 0.55))
+    private static let veilHover = Theme.adaptive(dark: NSColor(white: 1, alpha: 0.20), light: NSColor(white: 1, alpha: 0.78))
+    private static let rimTop = Theme.adaptive(dark: NSColor(white: 1, alpha: 0.30), light: NSColor(white: 1, alpha: 0.90))
+    private static let rimBottom = Theme.adaptive(dark: NSColor(white: 1, alpha: 0.06), light: NSColor(white: 0, alpha: 0.07))
 
     var body: some View {
         Button(action: action) {
@@ -982,13 +993,14 @@ private struct SourceButton: View {
     }
 
     /// The same glass as the capsules over the artwork: a light veil, a rim brighter on top.
+    /// Milkier in light mode, with a faint dark rim at the bottom.
     private func glass<S: InsettableShape>(_ shape: S) -> some View {
-        shape.fill(Color.white.opacity(hovering ? 0.20 : 0.12))
+        shape.fill(hovering ? Self.veilHover : Self.veil)
             .background(shape.fill(.ultraThinMaterial))
             .overlay(
                 shape.strokeBorder(
                     LinearGradient(
-                        colors: [Color.white.opacity(0.30), Color.white.opacity(0.06)],
+                        colors: [Self.rimTop, Self.rimBottom],
                         startPoint: .top,
                         endPoint: .bottom
                     ),
@@ -1009,7 +1021,7 @@ struct PermissionBanner: View {
                     Text("\(problem.source.displayName) needs permission · Open Settings")
                 }
                 .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(Theme.primary)
+                .foregroundStyle(Color.white)
                 .padding(.horizontal, 12)
                 .frame(height: 26)
                 .background(Capsule().fill(Color.red.opacity(0.55)))

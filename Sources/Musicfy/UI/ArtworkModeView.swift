@@ -4,6 +4,10 @@ import SwiftUI
 /// the artwork itself, progressively blurred toward the bottom (as in Music).
 /// Resizes from its corners and sides; its measures follow the side (`ArtworkMetrics`) and
 /// it shows more controls as it grows (`ArtworkDensity`). Mini: on hover, only play/pause.
+///
+/// Light and dark: the text and transport stay white over the artwork in both, as in Music;
+/// in light mode the glass turns light (the top capsule and the app's glyph, with dark
+/// glyphs) and the round buttons get a lighter disc.
 struct ArtworkModeView: View {
     @ObservedObject var player: PlayerController
     @ObservedObject var settings: Settings
@@ -12,6 +16,9 @@ struct ArtworkModeView: View {
     private var showControls: Bool { panel.isHovering || panel.volumeOpen }
     /// Which controls show; steps with the size, with a little hysteresis.
     @State private var density = ArtworkDensity.normal
+    /// The system's appearance, read before this view sets dark for its controls.
+    @Environment(\.colorScheme) private var scheme
+    private var light: Bool { scheme == .light }
 
     var body: some View {
         GeometryReader { geo in
@@ -42,6 +49,8 @@ struct ArtworkModeView: View {
                 }
             }
             .coordinateSpace(name: ArtworkSpace.name)
+            // White over the artwork in both appearances; the glass opts back in below.
+            .environment(\.colorScheme, .dark)
             // Every measure comes from the metrics; nothing else scales on top.
             .environment(\.uiScale, 1)
             .environment(\.artworkMetrics, metrics)
@@ -82,11 +91,13 @@ struct ArtworkModeView: View {
             HStack(alignment: .top) {
                 if let kind = player.state?.source {
                     SourceChip(kind: kind, player: player)
+                        .environment(\.colorScheme, scheme)
                         .padding(.top, 2)
                 }
                 Spacer(minLength: 8)
                 if hasTopButtons {
                     GlassCapsule(player: player, settings: settings, panel: panel, density: density)
+                        .environment(\.colorScheme, scheme)
                 }
             }
             .padding(.top, 10)
@@ -114,13 +125,14 @@ struct ArtworkModeView: View {
                     if density == .large, player.state?.source.supportsFavorite == true {
                         RoundButton(
                             symbol: player.state?.favorited == true ? "star.fill" : "star",
+                            fill: roundFill,
                             diameter: m.moreButton,
                             help: "Favorite",
                             action: { player.toggleFavorite() }
                         )
                         .transition(.opacity)
                     }
-                    RoundButton(symbol: "ellipsis", diameter: m.moreButton, help: "More Options", action: panel.actions.showMenu)
+                    RoundButton(symbol: "ellipsis", fill: roundFill, diameter: m.moreButton, help: "More Options", action: panel.actions.showMenu)
                 }
                 TimeBar(player: player, stacked: true, timeSize: m.time)
                     .padding(.top, 8 * m.ratio)
@@ -135,6 +147,8 @@ struct ArtworkModeView: View {
         }
     }
 
+    private var roundFill: Color { light ? Theme.roundButtonFillLight : Theme.roundButtonFill }
+
     /// Whether the capsule at the top right would hold anything at this size.
     private var hasTopButtons: Bool {
         if density == .large || panel.volumeOpen { return true }
@@ -145,7 +159,8 @@ struct ArtworkModeView: View {
     }
 
     /// Under the controls: the progressively blurred artwork (computed once per artwork)
-    /// and a veil that darkens toward the bottom so white reads on light artwork.
+    /// and a veil that darkens toward the bottom so white reads on light artwork (a touch
+    /// softer in light mode, where Music's glass reads a little brighter).
     private var glass: some View {
         ZStack {
             ZStack {
@@ -167,8 +182,8 @@ struct ArtworkModeView: View {
                 // The veil covers the bottom 64 % of the side.
                 stops: [
                     .init(color: .black.opacity(0), location: 0.36),
-                    .init(color: .black.opacity(0.14), location: 0.64),
-                    .init(color: .black.opacity(0.34), location: 1),
+                    .init(color: .black.opacity(light ? 0.11 : 0.14), location: 0.64),
+                    .init(color: .black.opacity(light ? 0.30 : 0.34), location: 1),
                 ],
                 startPoint: .top,
                 endPoint: .bottom

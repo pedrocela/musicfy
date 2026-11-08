@@ -83,7 +83,8 @@ struct ProgressBarLayer: NSViewRepresentable {
     func makeNSView(context: Context) -> ProgressBarView { ProgressBarView() }
 
     func updateNSView(_ view: ProgressBarView, context: Context) {
-        view.setColors(fill: NSColor(fill).cgColor, track: NSColor(track).cgColor)
+        // Resolved for this view's appearance: a layer can't follow light and dark by itself.
+        view.setColors(fill: fill.resolve(in: context.environment).cgColor, track: track.resolve(in: context.environment).cgColor)
         view.show(ProgressMotion(fraction: max(0, min(1, fraction)), rate: max(0, rate)), smooth: smooth)
     }
 }
@@ -159,7 +160,7 @@ struct ProgressRingLayer: NSViewRepresentable {
 
     func updateNSView(_ view: ProgressRingView, context: Context) {
         view.lineWidth = lineWidth
-        view.setColor(NSColor(color).cgColor)
+        view.setColor(color.resolve(in: context.environment).cgColor)
         view.show(ProgressMotion(fraction: max(0, min(1, fraction)), rate: max(0, rate)))
     }
 }

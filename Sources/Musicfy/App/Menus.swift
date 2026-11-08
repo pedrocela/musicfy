@@ -86,7 +86,6 @@ enum Menus {
     /// the mode selector on top, then the song, the settings submenus, and the app.
     static func main(app: AppDelegate) -> NSMenu {
         let menu = NSMenu()
-        menu.appearance = NSAppearance(named: .darkAqua)
         menu.minimumWidth = 264
         menu.showsStateColumn = false
         let player = app.player
@@ -201,7 +200,6 @@ enum Menus {
 
     static func output() -> NSMenu {
         let menu = NSMenu()
-        menu.appearance = NSAppearance(named: .darkAqua)
         menu.addHeader("Audio Output")
         fillOutputs(menu)
         return menu

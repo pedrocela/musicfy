@@ -4,6 +4,7 @@ import SwiftUI
 /// At rest it's quiet: a big cover, the title and artist, and a hairline of progress.
 /// On hover the times, the transport and the top buttons (over the cover) fade in.
 /// The open Island is this same view with the controls showing, on the Island's own background.
+/// Follows the system appearance: a deep tint with white text, or a pale tint with dark text.
 struct CompactModeView: View {
     @ObservedObject var player: PlayerController
     @ObservedObject var settings: Settings
@@ -15,9 +16,9 @@ struct CompactModeView: View {
     var body: some View {
         ZStack {
             if !inIsland {
-                Color(nsColor: player.palette.background)
+                Color(nsColor: player.palette.backdrop)
                     .animation(Theme.crossfade, value: player.palette)
-                LinearGradient(colors: [Color.white.opacity(0.07), .clear], startPoint: .top, endPoint: .center)
+                LinearGradient(colors: [Theme.sheen, .clear], startPoint: .top, endPoint: .center)
                     .allowsHitTesting(false)
                 WindowDragArea(onDoubleClick: panel.actions.toggleArtworkCompact)
             }
@@ -90,13 +91,16 @@ struct CompactModeView: View {
 private struct Hairline: View {
     @ObservedObject var player: PlayerController
 
+    private static let fill = Theme.adaptive(dark: NSColor(white: 1, alpha: 0.62), light: NSColor(white: 0, alpha: 0.40))
+    private static let track = Theme.adaptive(dark: NSColor(white: 1, alpha: 0.14), light: NSColor(white: 0, alpha: 0.10))
+
     var body: some View {
         PlaybackTimeline(clock: player.clock) { _ in
             ProgressBarLayer(
                 fraction: player.progressFraction(),
                 rate: player.progressRate,
-                fill: Color.white.opacity(0.62),
-                track: Color.white.opacity(0.14)
+                fill: Self.fill,
+                track: Self.track
             )
         }
         .frame(height: 3)
@@ -162,12 +166,14 @@ private struct CompactCover: View {
                 }
                 .shadow(color: .black.opacity(0.3), radius: 3, y: 1)
                 .padding(.bottom, 3)
+                // Over the cover's dark veil: white in both appearances.
+                .environment(\.colorScheme, .dark)
                 .transition(.opacity.combined(with: .offset(y: 4)))
             }
         }
         .clipShape(shape)
-        .overlay(shape.strokeBorder(Color.white.opacity(0.14), lineWidth: 0.5).allowsHitTesting(false))
-        .shadow(color: .black.opacity(0.28), radius: 8, y: 3)
+        .overlay(shape.strokeBorder(Theme.coverStroke, lineWidth: 0.5).allowsHitTesting(false))
+        .shadow(color: Theme.coverShadow, radius: 8, y: 3)
         .animation(Theme.fade, value: hovering)
         .animation(Theme.fade, value: showControls)
     }

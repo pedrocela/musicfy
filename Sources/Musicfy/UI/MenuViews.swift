@@ -14,10 +14,9 @@ struct ModeSelectorView: View {
         }
         .padding(3)
         .frame(width: 254, height: 64)
-        .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(Color.white.opacity(0.05)))
+        .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(MenuInk.well))
         .padding(.horizontal, 5)
         .padding(.vertical, 3)
-        .environment(\.colorScheme, .dark)
     }
 }
 
@@ -37,13 +36,13 @@ private struct ModeSegment: View {
                     .font(.system(size: 11, weight: .medium))
             }
             .padding(.bottom, 2)
-            .foregroundStyle(Color.white)
+            .foregroundStyle(Theme.ink)
             .opacity(selected || hovering ? 1 : 0.55)
             .frame(width: 81, height: 58)
             .background(
                 RoundedRectangle(cornerRadius: 5, style: .continuous)
-                    .fill(Color.white.opacity(selected ? 0.15 : hovering ? 0.06 : 0))
-                    .shadow(color: .black.opacity(selected ? 0.35 : 0), radius: 1, y: 1)
+                    .fill(selected ? MenuInk.lifted : Theme.ink.opacity(hovering ? 0.06 : 0))
+                    .shadow(color: selected ? MenuInk.liftShadow : .clear, radius: 1, y: 1)
             )
             .contentShape(Rectangle())
         }
@@ -58,16 +57,16 @@ private struct ModeSegment: View {
 /// a square at the top right (Artwork), a bar (Compact), a pill under the menu bar (Island).
 private struct ModePictogram: View {
     let mode: DisplayMode
-    private let player = Color.white
+    private let player = Theme.ink
 
     var body: some View {
         ZStack(alignment: .top) {
             RoundedRectangle(cornerRadius: 3.5, style: .continuous)
-                .fill(Color.white.opacity(0.08))
+                .fill(Theme.ink.opacity(0.08))
             RoundedRectangle(cornerRadius: 3.5, style: .continuous)
-                .strokeBorder(Color.white.opacity(0.35), lineWidth: 1)
+                .strokeBorder(Theme.ink.opacity(0.35), lineWidth: 1)
             Rectangle()
-                .fill(Color.white.opacity(0.28))
+                .fill(Theme.ink.opacity(0.28))
                 .frame(height: 3)
                 .padding(.horizontal, 1)
                 .padding(.top, 1)
@@ -135,10 +134,9 @@ struct MenuTransportView: View {
         }
         .padding(3)
         .frame(width: 254, height: 40)
-        .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(Color.white.opacity(0.05)))
+        .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(MenuInk.well))
         .padding(.horizontal, 5)
         .padding(.vertical, 3)
-        .environment(\.colorScheme, .dark)
     }
 }
 
@@ -154,13 +152,13 @@ private struct MenuTransportButton: View {
         Button(action: action) {
             Image(systemName: symbol)
                 .font(.system(size: size, weight: .medium))
-                .foregroundStyle(Color.white)
+                .foregroundStyle(Theme.ink)
                 .opacity(active == false && !hovering ? 0.55 : 1)
                 .frame(maxWidth: .infinity)
                 .frame(height: 34)
                 .background(
                     RoundedRectangle(cornerRadius: 5, style: .continuous)
-                        .fill(Color.white.opacity(active == true ? 0.15 : hovering ? 0.06 : 0))
+                        .fill(active == true ? MenuInk.lifted : Theme.ink.opacity(hovering ? 0.06 : 0))
                 )
                 .contentShape(Rectangle())
         }
@@ -170,4 +168,12 @@ private struct MenuTransportButton: View {
         .animation(Theme.fade, value: hovering)
         .animation(Theme.fade, value: active)
     }
+}
+
+/// The menu's drawn parts follow the menu's appearance (the system's): a well a shade off
+/// the menu, and the chosen segment lifted out of it (lighter in dark mode, white in light).
+private enum MenuInk {
+    static let well = Theme.adaptive(dark: NSColor(white: 1, alpha: 0.05), light: NSColor(white: 0, alpha: 0.05))
+    static let lifted = Theme.adaptive(dark: NSColor(white: 1, alpha: 0.15), light: NSColor(white: 1, alpha: 1))
+    static let liftShadow = Theme.adaptive(dark: NSColor(white: 0, alpha: 0.35), light: NSColor(white: 0, alpha: 0.18))
 }

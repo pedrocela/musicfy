@@ -14,7 +14,7 @@ struct IslandView: View {
     @State private var settled = false
 
     private var expanded: Bool { panel.islandExpanded }
-    private var accent: Color { Color(nsColor: player.palette.accent) }
+    private var accent: Color { Color(nsColor: player.palette.tint) }
     private var playing: Bool { player.state?.isPlaying ?? false }
 
     var body: some View {
@@ -23,9 +23,10 @@ struct IslandView: View {
         VStack(alignment: panel.islandAlignment.horizontal, spacing: 0) {
             ZStack(alignment: .top) {
                 // Tinted with the artwork's color, like compact.
-                Color(nsColor: player.palette.background)
+                // Follows the system appearance: deep in dark mode, pale in light mode.
+                Color(nsColor: player.palette.backdrop)
                     .animation(Theme.crossfade, value: player.palette)
-                LinearGradient(colors: [Color.white.opacity(0.06), .clear], startPoint: .top, endPoint: .center)
+                LinearGradient(colors: [Theme.sheen, .clear], startPoint: .top, endPoint: .center)
                     .allowsHitTesting(false)
                 IslandDragArea()
                 if expanded {
@@ -46,7 +47,7 @@ struct IslandView: View {
             .clipShape(shape)
             .overlay(shape.strokeBorder(Theme.islandStroke, lineWidth: 0.5))
             // Pulled down, it grows a little and its rim brightens: it's about to become the artwork.
-            .overlay(shape.strokeBorder(Color.white.opacity(0.28 * panel.islandPull), lineWidth: 1))
+            .overlay(shape.strokeBorder(Theme.ink.opacity(0.28 * panel.islandPull), lineWidth: 1))
             // The shadow comes from a plain shape behind the pill (the tint above covers it).
             // A shadow of the pill itself is redrawn every time anything inside it moves.
             .background(
@@ -68,7 +69,6 @@ struct IslandView: View {
             maxHeight: .infinity,
             alignment: Alignment(horizontal: panel.islandAlignment.horizontal, vertical: .top)
         )
-        .environment(\.colorScheme, .dark)
         .environment(\.marqueeOnLayer, true)
         .onAppear {
             withAnimation(Theme.smooth.delay(0.03)) { settled = true }
@@ -100,7 +100,7 @@ struct IslandView: View {
                     MarqueeText(
                         text: state.title,
                         font: Theme.islandTitle,
-                        color: playing ? Theme.primary : Color.white.opacity(0.82),
+                        color: playing ? Theme.primary : Theme.primary.opacity(0.85),
                         height: 16,
                         trailingFade: 36,
                         scrolls: false
@@ -110,13 +110,13 @@ struct IslandView: View {
                     } else {
                         Text("Paused")
                             .font(Theme.islandSubtitle)
-                            .foregroundStyle(Color.white.opacity(0.55))
+                            .foregroundStyle(Theme.quaternary)
                             .frame(height: 14)
                     }
                 } else {
                     Text("Nothing Playing")
                         .font(Theme.islandTitle)
-                        .foregroundStyle(Color.white.opacity(0.75))
+                        .foregroundStyle(Theme.secondary)
                 }
             }
             .id(player.state?.trackKey ?? "")
@@ -179,7 +179,7 @@ private struct IslandCover: View {
                 .frame(width: side, height: side)
                 .overlay(Color.black.opacity(hovering ? 0.15 : 0))
                 .clipShape(shape)
-                .overlay(shape.strokeBorder(Color.white.opacity(hovering ? 0.25 : 0.1), lineWidth: 0.5))
+                .overlay(shape.strokeBorder(Theme.ink.opacity(hovering ? 0.25 : 0.1), lineWidth: 0.5))
                 .contentShape(shape)
         }
         .buttonStyle(PressableStyle())
@@ -201,11 +201,11 @@ private struct ProgressRing: View {
         // set again only when the player publishes something new.
         ZStack {
             Circle()
-                .stroke(Color.white.opacity(0.12), lineWidth: 2)
+                .stroke(Theme.ink.opacity(0.12), lineWidth: 2)
             ProgressRingLayer(
                 fraction: player.progressFraction(),
                 rate: player.progressRate,
-                color: playing ? accent : Color.white.opacity(0.55)
+                color: playing ? accent : Theme.quaternary
             )
             ZStack {
                 if playing {
@@ -215,7 +215,7 @@ private struct ProgressRing: View {
                 } else {
                     Image(systemName: "play.fill")
                         .font(.system(size: 8, weight: .bold))
-                        .foregroundStyle(Color.white.opacity(0.75))
+                        .foregroundStyle(Theme.secondary)
                         .offset(x: 0.5)
                         .transition(.opacity.combined(with: .scale(scale: 0.5)))
                 }
@@ -238,7 +238,7 @@ private struct Equalizer: NSViewRepresentable {
     func makeNSView(context: Context) -> EqualizerView { EqualizerView() }
 
     func updateNSView(_ view: EqualizerView, context: Context) {
-        view.color = NSColor(color).cgColor
+        view.color = color.resolve(in: context.environment).cgColor
     }
 }
 

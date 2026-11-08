@@ -1,15 +1,33 @@
 import AppKit
 
-/// Colors taken from the artwork: a dark background for compact mode
-/// and a vivid accent for the Island.
+/// Colors taken from the artwork: a background for compact mode and the Island, and a
+/// vivid accent for the Island. Each comes in a dark and a light version; `backdrop` and
+/// `tint` pick the one for the system appearance.
 struct ArtworkPalette: Equatable {
     var background: NSColor
     var accent: NSColor
+    var lightBackground: NSColor
+    var lightAccent: NSColor
 
     static let neutral = ArtworkPalette(
         background: NSColor(srgbRed: 0.20, green: 0.20, blue: 0.21, alpha: 1),
-        accent: NSColor(srgbRed: 0.92, green: 0.92, blue: 0.94, alpha: 1)
+        accent: NSColor(srgbRed: 0.92, green: 0.92, blue: 0.94, alpha: 1),
+        lightBackground: NSColor(srgbRed: 0.94, green: 0.94, blue: 0.95, alpha: 1),
+        lightAccent: NSColor(srgbRed: 0.30, green: 0.30, blue: 0.33, alpha: 1)
     )
+
+    /// The background for the current appearance: deep in dark mode, a pale wash of the
+    /// same hue in light mode.
+    var backdrop: NSColor { Self.adaptive(dark: background, light: lightBackground) }
+    /// The accent for the current appearance: bright on dark, deeper on light so it holds
+    /// up on the pale background.
+    var tint: NSColor { Self.adaptive(dark: accent, light: lightAccent) }
+
+    private static func adaptive(dark: NSColor, light: NSColor) -> NSColor {
+        NSColor(name: nil) { appearance in
+            appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? dark : light
+        }
+    }
 
     /// Average of the artwork scaled to 16 × 16, weighting colorful pixels more:
     /// a black cover with an orange face gives orange, not black.
@@ -56,7 +74,9 @@ struct ArtworkPalette: Equatable {
         }
         return ArtworkPalette(
             background: NSColor(hue: hue, saturation: min(saturation, 0.42), brightness: 0.25, alpha: 1),
-            accent: NSColor(hue: hue, saturation: max(0.45, min(saturation, 0.78)), brightness: 0.9, alpha: 1)
+            accent: NSColor(hue: hue, saturation: max(0.45, min(saturation, 0.78)), brightness: 0.9, alpha: 1),
+            lightBackground: NSColor(hue: hue, saturation: min(saturation, 0.42) * 0.28, brightness: 0.95, alpha: 1),
+            lightAccent: NSColor(hue: hue, saturation: max(0.55, min(saturation, 0.85)), brightness: 0.62, alpha: 1)
         )
     }
 }
