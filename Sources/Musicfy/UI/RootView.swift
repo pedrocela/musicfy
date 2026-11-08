@@ -25,11 +25,22 @@ struct RootView: View {
         .environment(\.colorScheme, .dark)
     }
 
-    private var baseHeight: CGFloat {
-        panel.mode == .artwork ? panel.artworkSide : Theme.compactSize.height
+    /// The player's height, read from the window itself rather than from the model: while
+    /// resizing, the window changes before SwiftUI sees the new side, and a stale height
+    /// made the artwork jump inside the window.
+    private func baseHeight(in size: CGSize) -> CGFloat {
+        guard panel.mode == .artwork else { return Theme.compactSize.height }
+        // Square; shorter only while being squashed into compact. A panel below adds height.
+        return min(size.width, size.height)
     }
 
     private var framed: some View {
+        GeometryReader { geo in
+            framedContent(baseHeight: baseHeight(in: geo.size))
+        }
+    }
+
+    private func framedContent(baseHeight: CGFloat) -> some View {
         ZStack {
             VisualEffectBackground(cornerRadius: Theme.cornerRadius)
             VStack(spacing: 0) {

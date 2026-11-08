@@ -577,7 +577,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                     let height = resizeStartSide + (compact.height - resizeStartSide) * progress
                     let top = edges == .top ? resizeStartFrame.minY + height : resizeStartFrame.maxY
                     panelModel.squash = progress
-                    panel.setFrame(NSRect(x: resizeStartFrame.minX, y: top - height, width: width, height: height), display: true)
+                    applyLiveResize(NSRect(x: resizeStartFrame.minX, y: top - height, width: width, height: height))
                     return true
                 }
                 if panelModel.squash > 0 { panelModel.squash = 0 }
@@ -613,8 +613,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             let height = side + extra
             let left = edges.contains(.left) ? resizeStartFrame.maxX - side : resizeStartFrame.minX
             let bottom = edges.contains(.top) ? resizeStartFrame.minY : resizeStartFrame.maxY - height
-            panelModel.artworkSide = side
-            panel.setFrame(NSRect(x: left, y: bottom, width: side, height: height), display: true)
+            applyLiveResize(NSRect(x: left, y: bottom, width: side, height: height), side: side)
             return true
 
         case .compact:
@@ -631,12 +630,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             let left = edges.contains(.left) ? resizeStartFrame.maxX - width : resizeStartFrame.minX
             panelModel.grow = progress
             let frame = NSRect(x: left, y: resizeStartFrame.maxY - height, width: width, height: height)
-            panel.setFrame(keptOnScreen(frame), display: true)
+            applyLiveResize(keptOnScreen(frame))
             return true
 
         case .island:
             return false
         }
+    }
+
+    /// One step of a live resize: the model, the window and the layout change together,
+    /// with no animation, so the content never lags a frame behind the window.
+    private func applyLiveResize(_ frame: NSRect, side: CGFloat? = nil) {
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction) {
+            if let side { panelModel.artworkSide = side }
+        }
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        panel.setFrame(frame, display: false)
+        panel.contentView?.layoutSubtreeIfNeeded()
+        panel.displayIfNeeded()
+        CATransaction.commit()
     }
 
     private func endResize() {
