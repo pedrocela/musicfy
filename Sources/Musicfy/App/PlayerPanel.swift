@@ -13,9 +13,7 @@ final class PlayerPanel: NSPanel {
         )
         isFloatingPanel = true
         level = .floating
-        // Managed: it joins the Mission Control spread like any window (stationary kept it
-        // frozen in place). Still on every Space and over full-screen apps.
-        collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .managed, .ignoresCycle]
+        showsOverFullScreen = false
         hidesOnDeactivate = false
         isOpaque = false
         backgroundColor = .clear
@@ -26,6 +24,17 @@ final class PlayerPanel: NSPanel {
         animationBehavior = .none
         appearance = NSAppearance(named: .darkAqua)
         becomesKeyOnlyIfNeeded = true
+    }
+
+    /// On every Space; over full-screen apps and videos only if asked. Managed: it joins
+    /// the Mission Control spread like any window (stationary kept it frozen in place).
+    var showsOverFullScreen: Bool {
+        get { collectionBehavior.contains(.fullScreenAuxiliary) }
+        set {
+            collectionBehavior = newValue
+                ? [.canJoinAllSpaces, .fullScreenAuxiliary, .managed, .ignoresCycle]
+                : [.canJoinAllSpaces, .managed, .ignoresCycle]
+        }
     }
 
     // Can take the keyboard without activating the app (for menus and sliders).

@@ -1,8 +1,8 @@
 # Musicfy
 
 A floating player for **Music and Spotify** on macOS. Always in view: above every
-window, on every Space and over full-screen apps too. It shows whatever is playing
-in either app.
+window and on every Space. It stays out of full-screen apps and videos unless you turn
+on "Show Over Full Screen". It shows whatever is playing in either app.
 
 ## Modes
 
