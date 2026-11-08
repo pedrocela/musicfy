@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 /// Everything visual that can change without touching the logic: sizes, colors,
@@ -63,25 +64,78 @@ enum Theme {
     static let islandOpenTitle = Font.system(size: 15, weight: .semibold)
     static let lyric = Font.system(size: 21, weight: .bold)
 
-    static let primary = Color.white
-    static let secondary = Color.white.opacity(0.72)
-    static let tertiary = Color.white.opacity(0.62)
-    static let timeColor = Color.white.opacity(0.70)
+    // MARK: Light and dark
+    // Colors follow the system appearance, as Music's mini player does. Each token is one
+    // NSColor that resolves per appearance, so SwiftUI picks the right one from the
+    // environment's color scheme. Artwork mode keeps its text white over the artwork
+    // (it sets `.dark` for its controls) and only its glass turns light.
+
+    /// A color with one value in dark mode and another in light mode.
+    static func adaptive(dark: NSColor, light: NSColor) -> Color {
+        Color(nsColor: NSColor(name: nil) { appearance in
+            appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? dark : light
+        })
+    }
+
+    private static func white(_ alpha: CGFloat) -> NSColor { NSColor(white: 1, alpha: alpha) }
+    private static func black(_ alpha: CGFloat) -> NSColor { NSColor(white: 0, alpha: alpha) }
+
+    /// The ink of text and glyphs: white in dark mode, near black in light mode.
+    /// Use with `.opacity` for the quieter shades of lines, fills and rims.
+    static let ink = adaptive(dark: white(1), light: black(1))
+    /// The opposite of `ink`: the paper it's written on.
+    static let paper = adaptive(dark: black(1), light: white(1))
+
+    static let primary = adaptive(dark: white(1), light: black(0.86))
+    static let secondary = adaptive(dark: white(0.72), light: black(0.56))
+    static let tertiary = adaptive(dark: white(0.62), light: black(0.46))
+    static let quaternary = adaptive(dark: white(0.55), light: black(0.42))
+    static let timeColor = adaptive(dark: white(0.70), light: black(0.50))
 
     // MARK: Bars
-    static let barTrack = Color.white.opacity(0.22)
-    static let barFill = Color.white.opacity(0.88)
+    static let barTrack = adaptive(dark: white(0.22), light: black(0.12))
+    static let barFill = adaptive(dark: white(0.88), light: black(0.58))
     static let barHeight: CGFloat = 4
     static let barHeightActive: CGFloat = 7
 
     // MARK: Glass
+    /// Star and "…" over the artwork; a lighter disc in light mode, as in Music.
     static let roundButtonFill = Color.white.opacity(0.2)
-    /// Capsules over the artwork: the blurred artwork, a dark veil and a rim of light.
-    static let glassTint = Color.black.opacity(0.24)
-    static let glassEdgeTop = Color.white.opacity(0.32)
-    static let glassEdgeBottom = Color.white.opacity(0.06)
-    static let windowStroke = Color.white.opacity(0.12)
-    static let islandStroke = Color.white.opacity(0.09)
+    static let roundButtonFillLight = Color.white.opacity(0.32)
+    /// The chip under an active toggle (shuffle, repeat).
+    static let toggleChip = adaptive(dark: white(0.22), light: black(0.08))
+    /// Capsules over the artwork: the blurred artwork, a veil and a rim of light.
+    /// Dark mode: a dark veil and white glyphs. Light mode: milky glass and dark glyphs.
+    static let glassTint = adaptive(dark: black(0.24), light: white(0.52))
+    static let glassEdgeTop = adaptive(dark: white(0.32), light: white(0.85))
+    static let glassEdgeBottom = adaptive(dark: white(0.06), light: white(0.30))
+    /// The top capsule: system material plus this veil, a rim and a hairline between groups.
+    static let capsuleVeil = adaptive(dark: black(0.42), light: white(0.46))
+    static let capsuleStroke = adaptive(dark: white(0.18), light: white(0.70))
+    static let capsuleDivider = adaptive(dark: white(0.16), light: black(0.12))
+    static let capsuleShadow = adaptive(dark: black(0.25), light: black(0.16))
+    /// Its buttons: at rest, on hover or pressed, and the pill of an active one.
+    static let capsuleIcon = adaptive(dark: white(0.85), light: black(0.72))
+    static let capsuleIconHover = adaptive(dark: white(1), light: black(0.9))
+    static let capsuleHover = adaptive(dark: white(0.12), light: black(0.06))
+    static let capsulePressed = adaptive(dark: white(0.18), light: black(0.11))
+    static let capsuleActive = adaptive(dark: white(1), light: black(0.80))
+    static let capsuleActiveIcon = adaptive(
+        dark: NSColor(srgbRed: 0.102, green: 0.078, blue: 0.071, alpha: 1), // #1A1412
+        light: white(1)
+    )
+    static let windowStroke = adaptive(dark: white(0.12), light: black(0.10))
+    static let islandStroke = adaptive(dark: white(0.09), light: black(0.08))
+    /// The sheen at the top of compact and the Island.
+    static let sheen = adaptive(dark: white(0.07), light: white(0.40))
+    /// The rim around covers and thumbnails.
+    static let coverStroke = adaptive(dark: white(0.12), light: black(0.08))
+    /// The shadow under covers in compact.
+    static let coverShadow = adaptive(dark: black(0.30), light: black(0.16))
+    /// Hairlines between rows and above the panel below.
+    static let separator = adaptive(dark: white(0.08), light: black(0.08))
+    /// A faint wash behind the lyrics and Up Next panel.
+    static let drawerWash = adaptive(dark: black(0.10), light: white(0.20))
 
     // MARK: Each app's color (the source glyph)
     static func sourceColor(_ kind: SourceKind) -> Color {

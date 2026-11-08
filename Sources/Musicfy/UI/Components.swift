@@ -4,10 +4,12 @@ import os
 
 // MARK: - Translucent background
 
-/// macOS dark glass, blended with whatever is behind the window.
+/// macOS glass, blended with whatever is behind the window: the dark HUD glass in dark
+/// mode, the light popover glass in light mode (it follows the view's color scheme).
 /// Clipped with its own mask: SwiftUI's clip doesn't always reach an AppKit view.
 struct VisualEffectBackground: NSViewRepresentable {
-    var material: NSVisualEffectView.Material = .hudWindow
+    /// `nil`: picked by the color scheme.
+    var material: NSVisualEffectView.Material? = nil
     var cornerRadius: CGFloat = Theme.cornerRadius
 
     func makeNSView(context: Context) -> NSVisualEffectView {
@@ -19,7 +21,9 @@ struct VisualEffectBackground: NSViewRepresentable {
     }
 
     func updateNSView(_ view: NSVisualEffectView, context: Context) {
-        view.material = material
+        let dark = context.environment.colorScheme == .dark
+        view.appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
+        view.material = material ?? (dark ? .hudWindow : .popover)
         view.maskImage = Self.mask(radius: cornerRadius)
     }
 
@@ -165,7 +169,7 @@ struct IconButton: View {
                 .frame(width: (size + 10) * scale, height: (size + 8) * scale)
                 .background(
                     RoundedRectangle(cornerRadius: 7 * scale, style: .continuous)
-                        .fill(Color.white.opacity(active == true ? 0.22 : 0))
+                        .fill(active == true ? Theme.toggleChip : Color.clear)
                 )
                 .frame(width: (size + 18) * scale, height: (size + 14) * scale)
                 .contentShape(Rectangle())
@@ -182,6 +186,7 @@ struct IconButton: View {
 struct RoundButton: View {
     let symbol: String
     var tint: Color = Theme.primary
+    var fill: Color = Theme.roundButtonFill
     var diameter: CGFloat = 30
     var help: String = ""
     let action: () -> Void
@@ -194,7 +199,7 @@ struct RoundButton: View {
                 .foregroundStyle(tint)
                 .contentTransition(.symbolEffect(.replace))
                 .frame(width: diameter * scale, height: diameter * scale)
-                .background(Circle().fill(Theme.roundButtonFill))
+                .background(Circle().fill(fill))
                 .contentShape(Circle())
         }
         .buttonStyle(PressableStyle())
@@ -230,7 +235,7 @@ struct ScrubBar: View {
                 fraction: clamped,
                 rate: active ? 0 : rate,
                 smooth: smoothFill && !active,
-                fill: active ? Color.white : fill,
+                fill: active ? Theme.primary : fill,
                 track: track
             )
             .frame(height: height)
@@ -380,15 +385,18 @@ private struct MarqueeLayer: NSViewRepresentable {
     func makeNSView(context: Context) -> MarqueeLayerView { MarqueeLayerView() }
 
     func updateNSView(_ view: MarqueeLayerView, context: Context) {
+        // The text is hosted on its own, outside this view's environment: its color is
+        // resolved here, for the current appearance, and is part of the key.
+        let resolved = color.resolve(in: context.environment)
         view.configure(
             content: AnyView(
                 Text(text)
                     .font(font)
-                    .foregroundStyle(color)
+                    .foregroundStyle(Color(resolved))
                     .lineLimit(1)
                     .fixedSize()
             ),
-            key: "\(text)|\(Int(textWidth))|\(Int(containerWidth))",
+            key: "\(text)|\(Int(textWidth))|\(Int(containerWidth))|\(resolved.red),\(resolved.green),\(resolved.blue),\(resolved.opacity)",
             textWidth: textWidth,
             fadeStart: fadeStart
         )

@@ -12,7 +12,7 @@ struct QueuePanel: View {
                     detail: "Spotify doesn't share its queue with other apps."
                 )
             } else if player.queueLoading {
-                ProgressView().controlSize(.small).tint(.white)
+                ProgressView().controlSize(.small).tint(Theme.primary)
             } else if let queue = player.queue, !queue.items.isEmpty {
                 list(queue)
             } else {
@@ -31,7 +31,7 @@ struct QueuePanel: View {
                 if !queue.playlistName.isEmpty {
                     Text("From \(queue.playlistName)")
                         .font(.system(size: 13))
-                        .foregroundStyle(Color.white.opacity(0.55))
+                        .foregroundStyle(Theme.quaternary)
                         .lineLimit(1)
                 }
             }
@@ -39,7 +39,7 @@ struct QueuePanel: View {
             .padding(.top, 14)
             .padding(.bottom, 10)
 
-            Rectangle().fill(Color.white.opacity(0.1)).frame(height: 0.5)
+            Rectangle().fill(Theme.separator).frame(height: 0.5)
 
             ScrollView(showsIndicators: false) {
                 LazyVStack(spacing: 0) {
@@ -69,7 +69,7 @@ private struct QueueRow: View {
                         .foregroundStyle(Theme.primary)
                     Text(item.subtitle)
                         .font(.system(size: 12))
-                        .foregroundStyle(Color.white.opacity(0.55))
+                        .foregroundStyle(Theme.quaternary)
                 }
                 .lineLimit(1)
                 Spacer(minLength: 0)
@@ -79,7 +79,7 @@ private struct QueueRow: View {
             .overlay(alignment: .bottom) {
                 if !isLast {
                     Rectangle()
-                        .fill(Color.white.opacity(0.08))
+                        .fill(Theme.separator)
                         .frame(height: 0.5)
                         .padding(.leading, 62)
                         .padding(.trailing, 16)
@@ -95,7 +95,7 @@ private struct QueueRow: View {
 private struct RowStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .background(Color.white.opacity(configuration.isPressed ? 0.1 : 0))
+            .background(Theme.ink.opacity(configuration.isPressed ? 0.1 : 0))
             .animation(Theme.fade, value: configuration.isPressed)
     }
 }
@@ -117,7 +117,7 @@ private struct QueueThumb: View {
             .clipShape(RoundedRectangle(cornerRadius: 3, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 3, style: .continuous)
-                    .strokeBorder(Color.white.opacity(0.12), lineWidth: 0.5)
+                    .strokeBorder(Theme.coverStroke, lineWidth: 0.5)
             )
             .task(id: item.id) {
                 guard !sameAlbum else { return }

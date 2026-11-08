@@ -25,7 +25,8 @@ final class PlayerPanel: NSPanel {
         isMovableByWindowBackground = false
         isReleasedWhenClosed = false
         animationBehavior = .none
-        appearance = NSAppearance(named: .darkAqua)
+        // No fixed appearance: it follows the system's light or dark mode, as Music does.
+
         // A click makes it key (without activating the app), so the keyboard
         // shortcuts below work right after clicking the player.
         becomesKeyOnlyIfNeeded = false
