@@ -110,6 +110,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             }
             .store(in: &cancellables)
 
+        // Panel de letras o cola: la ventana crece hacia abajo.
+        panelModel.$drawer
+            .dropFirst()
+            .removeDuplicates()
+            .receive(on: RunLoop.main)
+            .sink { [weak self] drawer in
+                guard let self else { return }
+                self.player.lyricsVisible = drawer == .lyrics
+                self.player.queueVisible = drawer == .queue
+                if self.panelModel.mode != .island { self.animateFrame(to: self.framedRect(for: self.panelModel.mode)) }
+            }
+            .store(in: &cancellables)
+
         // Play / pausa: decide si achicar, esconder o volver.
         player.$state
             .map { $0?.isPlaying ?? false }
@@ -196,6 +209,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         guard from != to else { return }
         panelModel.volumeOpen = false
         panelModel.islandExpanded = false
+        if to == .island {
+            panelModel.drawer = .none
+        } else if from == .island {
+            player.lyricsVisible = false
+        }
 
         if from == .island || to == .island || !animated || !panel.isVisible {
             // De o hacia la Isla cambia el lugar de la ventana: fundido de salida y de entrada.
@@ -209,7 +227,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
 
         panelModel.mode = to
-        let frame = framedRect(for: to)
+        animateFrame(to: framedRect(for: to))
+    }
+
+    private func animateFrame(to frame: NSRect) {
+        guard panel.isVisible else {
+            placePanel(for: panelModel.mode)
+            return
+        }
         applyingFrame = true
         NSAnimationContext.runAnimationGroup({ context in
             context.duration = Theme.resizeDuration
@@ -241,9 +266,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     private func size(for mode: DisplayMode) -> CGSize {
         switch mode {
-        case .artwork: return Theme.artworkSize
-        case .compact: return Theme.compactSize
-        case .island: return islandWindowSize
+        case .artwork, .compact:
+            let base = mode == .artwork ? Theme.artworkSize : Theme.compactSize
+            let extra = panelModel.drawer == .none ? 0 : Theme.drawerHeight
+            return CGSize(width: base.width, height: base.height + extra)
+        case .island:
+            return islandWindowSize
         }
     }
 

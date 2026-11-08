@@ -84,3 +84,21 @@ struct PlayerState: Equatable {
 enum SourceProblem: Equatable {
     case notAuthorized
 }
+
+/// Lo que sigue en la lista que está sonando (sólo Music lo deja leer).
+struct QueueInfo: Equatable {
+    struct Item: Equatable, Identifiable {
+        /// Posición en la lista de Music (para mandarla a sonar).
+        let index: Int
+        let title: String
+        let artist: String
+        let album: String
+        let trackID: String
+
+        var id: String { "\(index)|\(trackID)" }
+        var subtitle: String { [artist, album].filter { !$0.isEmpty }.joined(separator: " — ") }
+    }
+
+    let playlistName: String
+    let items: [Item]
+}

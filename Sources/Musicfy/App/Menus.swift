@@ -70,6 +70,7 @@ enum Menus {
         }
         menu.addSubmenu("Botones") { sub in
             sub.add("Letras", checked: settings.showLyricsButton) { settings.showLyricsButton.toggle() }
+            sub.add("A continuación", checked: settings.showQueueButton) { settings.showQueueButton.toggle() }
             sub.add("Volumen", checked: settings.showVolume) { settings.showVolume.toggle() }
             sub.add("Salida de audio", checked: settings.showOutput) { settings.showOutput.toggle() }
         }

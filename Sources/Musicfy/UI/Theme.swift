@@ -13,6 +13,9 @@ enum Theme {
     /// Distancia entre la barra de menú y la Isla.
     static let islandTopGap: CGFloat = 6
 
+    /// Alto del panel de letras o de cola que se abre debajo.
+    static let drawerHeight: CGFloat = 380
+
     static let artworkRadius: CGFloat = 18
     static let compactRadius: CGFloat = 16
 
@@ -26,7 +29,7 @@ enum Theme {
     static let islandOpenTitle = Font.system(size: 15, weight: .semibold)
     static let time = Font.system(size: 11, weight: .medium).monospacedDigit()
     static let chip = Font.system(size: 12, weight: .semibold)
-    static let lyric = Font.system(size: 19, weight: .bold)
+    static let lyric = Font.system(size: 21, weight: .bold)
 
     static let primary = Color.white
     static let secondary = Color.white.opacity(0.72)

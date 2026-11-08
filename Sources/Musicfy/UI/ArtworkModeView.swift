@@ -12,10 +12,6 @@ struct ArtworkModeView: View {
     var body: some View {
         ZStack {
             CrossfadingArtwork(player: player)
-            if player.lyricsVisible {
-                LyricsOverlay(player: player, topInset: 52, bottomInset: showControls ? 150 : 16)
-                    .transition(.opacity)
-            }
             WindowDragArea(onDoubleClick: panel.actions.toggleArtworkCompact)
             if showControls {
                 controls
@@ -23,7 +19,6 @@ struct ArtworkModeView: View {
             }
         }
         .animation(Theme.fade, value: showControls)
-        .animation(Theme.smooth, value: player.lyricsVisible)
     }
 
     private var controls: some View {

@@ -26,6 +26,12 @@ final class PlayerController: ObservableObject {
     @Published private(set) var lyrics: Lyrics?
     @Published private(set) var lyricsLoading = false
     @Published private(set) var problem: Problem?
+    /// Cola de Music. `nil` con Spotify o si Music no la da.
+    @Published private(set) var queue: QueueInfo?
+    @Published private(set) var queueLoading = false
+    @Published var queueVisible = false {
+        didSet { if queueVisible { loadQueue() } }
+    }
     @Published var lyricsVisible = false {
         didSet { if lyricsVisible, let state { loadLyrics(for: state) } }
     }
@@ -45,6 +51,7 @@ final class PlayerController: ObservableObject {
     private var generation = 0
     private var artworkKey: String?
     private var lyricsKey: String?
+    private var queueKey: String?
     private var pendingVolume: Int?
     private var observers: [NSObjectProtocol] = []
     private var cancellables: Set<AnyCancellable> = []
@@ -160,8 +167,10 @@ final class PlayerController: ObservableObject {
             lyricsKey = nil
             return
         }
+        let trackChanged = chosen.trackKey != queueKey
         loadArtwork(for: chosen)
         if lyricsVisible { loadLyrics(for: chosen) }
+        if queueVisible, trackChanged { loadQueue() }
     }
 
     /// Posición interpolada: el script se lee cada 1,5 s pero la barra avanza fluida.
@@ -216,6 +225,31 @@ final class PlayerController: ObservableObject {
             self.lyrics = found
             self.lyricsLoading = false
         }
+    }
+
+    func loadQueue() {
+        guard let state, let source = sources[state.source] else {
+            queue = nil
+            return
+        }
+        queueKey = state.trackKey
+        queueLoading = queue == nil
+        let key = state.trackKey
+        AppleScriptRunner.shared.queue.async {
+            let info = source.fetchQueue()
+            Task { @MainActor in
+                guard self.queueKey == key else { return }
+                self.queue = info
+                self.queueLoading = false
+            }
+        }
+    }
+
+    func playQueueItem(_ item: QueueInfo.Item) {
+        guard let source = activeSource else { return }
+        generation += 1
+        source.playQueueItem(at: item.index)
+        refreshSoon(0.5)
     }
 
     // MARK: - Comandos

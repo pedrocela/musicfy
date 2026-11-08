@@ -70,7 +70,7 @@ struct IslandView: View {
                             height: 16
                         )
                         if playing {
-                            SubtitleLine(player: player, font: Theme.islandSubtitle, height: 14, text: islandSubtitle(state))
+                            SubtitleLine(player: player, font: Theme.islandSubtitle, height: 14, text: islandSubtitle(state), showsLyric: true)
                         } else {
                             Text("En pausa")
                                 .font(Theme.islandSubtitle)
@@ -129,7 +129,7 @@ struct IslandView: View {
                     thumbnail(side: 60, radius: 14)
                     VStack(alignment: .leading, spacing: 2) {
                         MarqueeText(text: player.state?.title ?? "", font: Theme.islandOpenTitle, color: Theme.primary, height: 19)
-                        SubtitleLine(player: player, font: Theme.compactSubtitle, height: 16)
+                        SubtitleLine(player: player, font: Theme.compactSubtitle, height: 16, showsLyric: true)
                     }
                     .id(player.state?.trackKey ?? "")
                     .transition(.opacity)

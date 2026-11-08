@@ -156,15 +156,24 @@ struct ToolbarIcons: View {
     var body: some View {
         HStack(spacing: 0) {
             if settings.showLyricsButton {
-                icon(player.lyricsVisible ? "quote.bubble.fill" : "quote.bubble", "Letras") {
-                    player.lyricsVisible.toggle()
+                icon(lyricsActive ? "quote.bubble.fill" : "quote.bubble", "Letras", active: lyricsActive) {
+                    if panel.mode == .island {
+                        player.lyricsVisible.toggle()
+                    } else {
+                        panel.drawer = panel.drawer == .lyrics ? .none : .lyrics
+                    }
                 }
             }
-            if settings.showVolume {
-                icon(volumeSymbol, "Volumen") { panel.volumeOpen.toggle() }
+            if settings.showQueueButton, panel.mode != .island {
+                icon("list.bullet", "A continuación", active: panel.drawer == .queue) {
+                    panel.drawer = panel.drawer == .queue ? .none : .queue
+                }
             }
             if settings.showOutput {
                 icon("airplayaudio", "Salida de audio") { panel.actions.showOutputMenu() }
+            }
+            if settings.showVolume {
+                icon(volumeSymbol, "Volumen", active: panel.volumeOpen) { panel.volumeOpen.toggle() }
             }
             if let modeSwitch {
                 icon(
@@ -173,6 +182,10 @@ struct ToolbarIcons: View {
                 ) { panel.actions.setMode(modeSwitch) }
             }
         }
+    }
+
+    private var lyricsActive: Bool {
+        panel.mode == .island ? player.lyricsVisible : panel.drawer == .lyrics
     }
 
     private var volumeSymbol: String {
@@ -185,14 +198,20 @@ struct ToolbarIcons: View {
         }
     }
 
-    private func icon(_ symbol: String, _ help: String, _ action: @escaping () -> Void) -> some View {
+    private func icon(_ symbol: String, _ help: String, active: Bool = false, _ action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: symbol)
                 .font(.system(size: iconSize, weight: .semibold))
                 .foregroundStyle(tint)
                 .contentTransition(.symbolEffect(.replace))
                 .frame(width: cell, height: cell)
+                .background(
+                    Circle()
+                        .fill(Color.white.opacity(active ? 0.24 : 0))
+                        .padding(2)
+                )
                 .contentShape(Rectangle())
+                .animation(Theme.fade, value: active)
         }
         .buttonStyle(PressableStyle())
         .help(help)
@@ -252,9 +271,11 @@ struct SubtitleLine: View {
     let font: Font
     let height: CGFloat
     var text: String? = nil
+    /// Sólo la Isla muestra la línea de la letra en lugar del subtítulo.
+    var showsLyric = false
 
     var body: some View {
-        if player.lyricsVisible, let lyrics = player.lyrics, lyrics.isSynced {
+        if showsLyric, player.lyricsVisible, let lyrics = player.lyrics, lyrics.isSynced {
             TimelineView(.periodic(from: .now, by: 0.25)) { context in
                 let index = lyrics.index(at: player.position(at: context.date) + 0.3)
                 let line = index.map { lyrics.lines[$0].text } ?? ""
@@ -275,53 +296,54 @@ struct SubtitleLine: View {
     }
 }
 
-// MARK: - Letras sobre la tapa
+// MARK: - Panel de letras
 
-struct LyricsOverlay: View {
+struct LyricsPanel: View {
     @ObservedObject var player: PlayerController
-    var topInset: CGFloat = 56
-    var bottomInset: CGFloat = 24
 
     var body: some View {
-        ZStack {
-            ArtworkFill(image: player.artwork)
-                .blur(radius: 40, opaque: true)
-                .saturation(1.3)
-            Color.black.opacity(0.45)
-            content
-                .padding(.top, topInset)
-                .padding(.bottom, bottomInset)
-        }
-        .allowsHitTesting(false)
-    }
-
-    @ViewBuilder
-    private var content: some View {
-        if player.lyricsLoading {
-            ProgressView().controlSize(.small).tint(.white)
-        } else if let lyrics = player.lyrics, lyrics.isSynced {
-            TimelineView(.periodic(from: .now, by: 0.2)) { context in
-                SyncedLyrics(lines: lyrics.lines, current: lyrics.index(at: player.position(at: context.date) + 0.3))
+        Group {
+            if player.lyricsLoading {
+                ProgressView().controlSize(.small).tint(.white)
+            } else if let lyrics = player.lyrics, lyrics.isSynced {
+                TimelineView(.periodic(from: .now, by: 0.2)) { context in
+                    SyncedLyrics(lines: lyrics.lines, current: lyrics.index(at: player.position(at: context.date) + 0.3))
+                }
+                .allowsHitTesting(false)
+            } else if let lyrics = player.lyrics, lyrics.instrumental {
+                PanelMessage(title: "Instrumental", detail: "Este tema no tiene letra.")
+            } else if let lyrics = player.lyrics, !lyrics.plain.isEmpty {
+                ScrollView(showsIndicators: false) {
+                    Text(lyrics.plain)
+                        .font(.system(size: 16, weight: .semibold))
+                        .lineSpacing(4)
+                        .foregroundStyle(Theme.primary.opacity(0.85))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(20)
+                }
+            } else {
+                PanelMessage(title: "No hay letra", detail: "No encontramos la letra de este tema.")
             }
-        } else if let lyrics = player.lyrics, lyrics.instrumental {
-            message("Instrumental")
-        } else if let lyrics = player.lyrics, !lyrics.plain.isEmpty {
-            ScrollView(showsIndicators: false) {
-                Text(lyrics.plain)
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(Theme.primary.opacity(0.85))
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 20)
-            }
-        } else {
-            message("No hay letra para este tema")
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
+}
 
-    private func message(_ text: String) -> some View {
-        Text(text)
-            .font(.system(size: 14, weight: .semibold))
-            .foregroundStyle(Theme.secondary)
+struct PanelMessage: View {
+    let title: String
+    let detail: String
+
+    var body: some View {
+        VStack(spacing: 6) {
+            Text(title)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(Color.white.opacity(0.62))
+            Text(detail)
+                .font(.system(size: 13))
+                .foregroundStyle(Color.white.opacity(0.45))
+                .multilineTextAlignment(.center)
+        }
+        .padding(.horizontal, 24)
     }
 }
 
@@ -346,7 +368,7 @@ private struct SyncedLyrics: View {
                     }
                 }
                 .padding(.horizontal, 20)
-                .padding(.vertical, 90)
+                .padding(.vertical, 150)
             }
             .mask(
                 LinearGradient(

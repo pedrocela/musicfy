@@ -21,6 +21,10 @@ protocol MediaSource: AnyObject {
     func setShuffle(_ on: Bool)
     func setRepeat(_ mode: RepeatMode)
     func setFavorite(_ on: Bool)
+
+    /// Corre en la cola de AppleScript. `nil` si la app no deja leer la cola.
+    func fetchQueue() -> QueueInfo?
+    func playQueueItem(at index: Int)
 }
 
 extension MediaSource {
@@ -162,6 +166,55 @@ final class MusicSource: MediaSource {
         }
     }
 
+    /// Los próximos temas de la lista que está sonando. Music no expone su
+    /// "A continuación" real; esto es lo que sigue en el disco o la lista.
+    private let queueScript = """
+        if application id "com.apple.Music" is not running then return {}
+        tell application id "com.apple.Music"
+        \ttry
+        \t\tset pl to current playlist
+        \t\tset plName to name of pl
+        \t\tset idx to index of current track
+        \t\tset total to count of tracks of pl
+        \ton error
+        \t\treturn {}
+        \tend try
+        \tset lastIndex to idx + 30
+        \tif lastIndex > total then set lastIndex to total
+        \tset rows to {}
+        \trepeat with i from (idx + 1) to lastIndex
+        \t\ttry
+        \t\t\tset t to track i of pl
+        \t\t\tset end of rows to {name of t, artist of t, album of t, persistent ID of t, i}
+        \t\tend try
+        \tend repeat
+        \treturn {plName, rows}
+        end tell
+        """
+
+    func fetchQueue() -> QueueInfo? {
+        guard kind.isRunning, case .success(let desc) = runner.run(queueScript), desc.numberOfItems >= 2,
+              let rows = desc.item(2) else { return nil }
+        var items: [QueueInfo.Item] = []
+        if rows.numberOfItems > 0 {
+            for row in 1...rows.numberOfItems {
+                guard let item = rows.item(row) else { continue }
+                items.append(QueueInfo.Item(
+                    index: item.int(5),
+                    title: item.string(1),
+                    artist: item.string(2),
+                    album: item.string(3),
+                    trackID: item.string(4)
+                ))
+            }
+        }
+        return QueueInfo(playlistName: desc.string(1), items: items)
+    }
+
+    func playQueueItem(at index: Int) {
+        runner.fire(command("play track \(index) of current playlist"), cache: false)
+    }
+
     /// AppleScript espera punto decimal, sin importar el idioma del sistema.
     static func number(_ value: Double) -> String {
         String(format: "%.2f", locale: Locale(identifier: "en_US_POSIX"), value)
@@ -236,4 +289,8 @@ final class SpotifySource: MediaSource {
     // Spotify sólo tiene repetir sí o no (no distingue "una" de "todas").
     func setRepeat(_ mode: RepeatMode) { runner.fire(command("set repeating to \(mode != .off)")) }
     func setFavorite(_ on: Bool) {}
+
+    /// Spotify no expone la cola por AppleScript.
+    func fetchQueue() -> QueueInfo? { nil }
+    func playQueueItem(at index: Int) {}
 }

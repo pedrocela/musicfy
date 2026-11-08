@@ -28,6 +28,7 @@ final class Settings: ObservableObject {
     @Published var showVolume: Bool { didSet { defaults.set(showVolume, forKey: "showVolume") } }
     @Published var showOutput: Bool { didSet { defaults.set(showOutput, forKey: "showOutput") } }
     @Published var showLyricsButton: Bool { didSet { defaults.set(showLyricsButton, forKey: "showLyricsButton") } }
+    @Published var showQueueButton: Bool { didSet { defaults.set(showQueueButton, forKey: "showQueueButton") } }
     @Published var idleBehavior: IdleBehavior { didSet { defaults.set(idleBehavior.rawValue, forKey: "idleBehavior") } }
 
     init() {
@@ -36,6 +37,7 @@ final class Settings: ObservableObject {
             "showVolume": true,
             "showOutput": true,
             "showLyricsButton": true,
+            "showQueueButton": true,
             "idleBehavior": IdleBehavior.compact.rawValue,
         ])
         mode = DisplayMode(rawValue: defaults.string(forKey: "mode") ?? "") ?? .artwork
@@ -43,6 +45,7 @@ final class Settings: ObservableObject {
         showVolume = defaults.bool(forKey: "showVolume")
         showOutput = defaults.bool(forKey: "showOutput")
         showLyricsButton = defaults.bool(forKey: "showLyricsButton")
+        showQueueButton = defaults.bool(forKey: "showQueueButton")
         idleBehavior = IdleBehavior(rawValue: defaults.string(forKey: "idleBehavior") ?? "") ?? .compact
     }
 }

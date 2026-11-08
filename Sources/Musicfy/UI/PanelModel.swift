@@ -9,8 +9,14 @@ final class PanelModel: ObservableObject {
     @Published var isHovering = false
     @Published var volumeOpen = false
     @Published var islandExpanded = false
+    /// Panel que se abre debajo del player (tapa y compacto), como en Music.
+    @Published var drawer: Drawer = .none
 
     var actions = PanelActions()
+}
+
+enum Drawer: Equatable {
+    case none, lyrics, queue
 }
 
 /// Lo que la interfaz le pide a la app; lo resuelve el AppDelegate.
