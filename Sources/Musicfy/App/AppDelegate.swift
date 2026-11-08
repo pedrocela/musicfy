@@ -541,14 +541,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     // MARK: - Resizing from the edges
 
-    /// Artwork: every edge. Compact: sides and bottom, to stretch it into the artwork.
+    /// Artwork: every edge. Compact: every edge too, to stretch it into the artwork.
     /// With lyrics or Up Next open below, the bottom edge belongs to that panel. Island: none.
     private var resizableEdges: ResizeEdges {
         guard !transitioning else { return [] }
         let open = panelModel.drawer != .none
         switch panelModel.mode {
         case .artwork: return open ? [.left, .right, .top] : .all
-        case .compact: return open ? [.left, .right] : [.left, .right, .bottom]
+        case .compact: return open ? [.left, .right, .top] : .all
         case .island: return []
         }
     }
@@ -630,6 +630,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             // Compact follows the mouse 1:1 toward the artwork size; the artwork fades in as it grows.
             var growth: CGFloat = 0
             if edges.contains(.bottom) { growth = max(growth, -dy) }
+            if edges.contains(.top) { growth = max(growth, dy) }
             if edges.contains(.right) { growth = max(growth, dx) }
             if edges.contains(.left) { growth = max(growth, -dx) }
             let side = panelModel.artworkSide
@@ -640,7 +641,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             let height = base.height + (side - base.height) * progress + extra
             let left = edges.contains(.left) ? resizeStartFrame.maxX - width : resizeStartFrame.minX
             panelModel.grow = progress
-            let frame = NSRect(x: left, y: resizeStartFrame.maxY - height, width: width, height: height)
+            // Pulled from the top it grows upward (the bottom stays); otherwise downward.
+            let bottom = edges.contains(.top) ? resizeStartFrame.minY : resizeStartFrame.maxY - height
+            let frame = NSRect(x: left, y: bottom, width: width, height: height)
             applyLiveResize(keptOnScreen(frame))
             return true
 

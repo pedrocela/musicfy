@@ -16,7 +16,7 @@ display, and comes back after (unless you turn on "Show Over Full Screen"). It s
   mode buttons step aside; under 250 only lyrics and volume stay up top, and the times
   appear when you point at the bar. Everything is still in the menu.
 - **Resize** artwork from any corner or side. Push its top or bottom edge in to turn it
-  into compact; pull compact's bottom or sides out to turn it back into artwork.
+  into compact; pull any edge or corner of compact out to turn it back into artwork.
 - **Drag** artwork or compact to the top center of the screen and let go: it becomes the
   Island. **Pull the Island down** and it becomes the artwork again.
 - **Double click** an empty area: switch between artwork and compact.
