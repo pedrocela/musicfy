@@ -25,6 +25,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var statusItem: NSStatusItem!
     private var cancellables: Set<AnyCancellable> = []
     private var mouseTimer: Timer?
+    private var mouseBackupTimer: Timer?
+    private var mouseMonitors: [Any] = []
+    private var lastMouse = NSPoint(x: -1, y: -1)
+    private var stillTicks = 0
     private var hoverExitWork: DispatchWorkItem?
     private var idleWork: DispatchWorkItem?
     private var islandCollapseWork: DispatchWorkItem?
@@ -121,6 +125,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     // MARK: - Observers
 
     private func observe() {
+        // A new mode or a morph can put the window under a mouse that isn't moving.
+        Publishers.Merge(
+            panelModel.$mode.map { _ in () },
+            panelModel.$morph.map { $0 == nil }.removeDuplicates().map { _ in () }
+        )
+        .dropFirst()
+        .receive(on: RunLoop.main)
+        .sink { [weak self] in self?.wakeMousePolling() }
+        .store(in: &cancellables)
+
         // The mode chosen in Settings.
         settings.$mode
             .dropFirst()
@@ -517,7 +531,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         animateFrame(to: islandWindowRect())
     }
 
+    func windowDidResize(_ notification: Notification) {
+        wakeMousePolling()
+    }
+
     func windowDidMove(_ notification: Notification) {
+        wakeMousePolling()
         guard !applyingFrame, !transitioning, panelModel.mode != .island else { return }
         anchor = NSPoint(x: panel.frame.minX, y: panel.frame.maxY)
     }
@@ -739,14 +758,94 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     // MARK: - Mouse
 
-    /// The mouse position is checked 30 times a second. It's more reliable than AppKit tracking
-    /// in a window that's never active, and lets the Island's transparent area pass clicks through.
+    /// While the mouse moves, its position is checked 30 times a second. It's more reliable
+    /// than AppKit tracking in a window that's never active, and lets the Island's transparent
+    /// area pass clicks through.
+    ///
+    /// Once the mouse has been still for a second and nothing is waiting on time to pass, the
+    /// checking rests: the next mouse event anywhere (or a window move) wakes it on the spot,
+    /// and a slow check every half second backs that up. Resting, the app costs nothing.
     private func startMousePolling() {
+        guard mouseTimer == nil else { return }
+        stopMouseListening()
+        stillTicks = 0
         let timer = Timer(timeInterval: 1.0 / 30, repeats: true) { [weak self] _ in
-            Task { @MainActor in self?.pollMouse() }
+            MainActor.assumeIsolated { self?.mouseTick() }
         }
+        timer.tolerance = 0.004
         RunLoop.main.add(timer, forMode: .common)
         mouseTimer = timer
+        pollMouse()
+    }
+
+    /// Any sign of life (mouse, window, mode): back to checking 30 times a second.
+    private func wakeMousePolling() {
+        if mouseTimer == nil { startMousePolling() }
+    }
+
+    private func mouseTick() {
+        let mouse = NSEvent.mouseLocation
+        if mouse == lastMouse {
+            stillTicks += 1
+        } else {
+            stillTicks = 0
+            lastMouse = mouse
+        }
+        pollMouse()
+        guard let panel else { return }
+        if !panel.isVisible {
+            // Hidden: nothing to follow until it shows again (showPanel wakes it).
+            restMousePolling(listening: false)
+        } else if stillTicks >= 30, mouseCanRest {
+            restMousePolling(listening: true)
+        }
+    }
+
+    /// Nothing that needs time to pass with the mouse still: a drag, a transition, a menu,
+    /// a button held down, or the Island waiting its moment to open.
+    private var mouseCanRest: Bool {
+        !draggingWindow && !transitioning && !menuOpen
+            && NSEvent.pressedMouseButtons == 0
+            && !(islandHoverSince != nil && !panelModel.islandExpanded)
+    }
+
+    private func restMousePolling(listening: Bool) {
+        mouseTimer?.invalidate()
+        mouseTimer = nil
+        stopMouseListening()
+        guard listening else { return }
+        let events: NSEvent.EventTypeMask = [
+            .mouseMoved, .leftMouseDragged, .rightMouseDragged, .otherMouseDragged,
+            .leftMouseDown, .rightMouseDown, .otherMouseDown, .scrollWheel,
+        ]
+        // Mouse events don't need any permission (only the keyboard does).
+        if let global = NSEvent.addGlobalMonitorForEvents(matching: events, handler: { [weak self] _ in
+            MainActor.assumeIsolated { self?.wakeMousePolling() }
+        }) {
+            mouseMonitors.append(global)
+        }
+        if let local = NSEvent.addLocalMonitorForEvents(matching: events, handler: { [weak self] event in
+            MainActor.assumeIsolated { self?.wakeMousePolling() }
+            return event
+        }) {
+            mouseMonitors.append(local)
+        }
+        let backup = Timer(timeInterval: 0.5, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self, NSEvent.mouseLocation != self.lastMouse else { return }
+                self.wakeMousePolling()
+            }
+        }
+        backup.tolerance = 0.1
+        RunLoop.main.add(backup, forMode: .common)
+        mouseBackupTimer = backup
+    }
+
+    private func stopMouseListening() {
+        for monitor in mouseMonitors { NSEvent.removeMonitor(monitor) }
+        mouseMonitors.removeAll()
+        mouseBackupTimer?.invalidate()
+        mouseBackupTimer = nil
     }
 
     private func pollMouse() {
@@ -814,6 +913,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         panel.alphaValue = 0
         panel.orderFrontRegardless()
         fade(to: 1, duration: 0.25)
+        player.panelVisible = true
+        wakeMousePolling()
         evaluateIdle()
     }
 
@@ -824,7 +925,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         panelModel.islandExpanded = false
         panelModel.volumeOpen = false
         fade(to: 0, duration: 0.2) { [weak self] in
-            self?.panel.orderOut(nil)
+            guard let self else { return }
+            self.panel.orderOut(nil)
+            self.player.panelVisible = false
         }
     }
 
@@ -861,6 +964,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         menuOpen = true
         menu.popUp(positioning: nil, at: NSEvent.mouseLocation, in: nil)
         menuOpen = false
+        wakeMousePolling()
     }
 
     // MARK: - Menu bar

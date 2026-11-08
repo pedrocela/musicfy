@@ -87,6 +87,15 @@ struct SourceChip: View {
 
 // MARK: - Time and progress
 
+/// Like a `TimelineView`, but on the player's clock: it stays still while nothing plays
+/// or the player is hidden, instead of redrawing the same frame several times a second.
+struct PlaybackTimeline<Content: View>: View {
+    @ObservedObject var clock: PlaybackClock
+    @ViewBuilder let content: (Date) -> Content
+
+    var body: some View { content(clock.now) }
+}
+
 struct TimeBar: View {
     @ObservedObject var player: PlayerController
     var fill: Color = Theme.barFill
@@ -99,12 +108,14 @@ struct TimeBar: View {
     @Environment(\.uiScale) private var scale
 
     var body: some View {
-        TimelineView(.periodic(from: .now, by: 0.25)) { context in
+        PlaybackTimeline(clock: player.clock) { now in
             let duration = player.state?.duration ?? 0
-            let live = player.position(at: context.date)
+            let live = player.position(at: now)
             let shown = dragFraction.map { $0 * duration } ?? live
             let bar = ScrubBar(
-                fraction: duration > 0 ? shown / duration : 0,
+                // The bar is placed for this very moment and then moves on its own.
+                fraction: dragFraction ?? player.progressFraction(),
+                rate: dragFraction == nil ? player.progressRate : 0,
                 fill: fill,
                 onChange: { dragFraction = $0 },
                 onCommit: { value in
@@ -368,8 +379,8 @@ struct SubtitleLine: View {
 
     var body: some View {
         if showsLyric, player.lyricsVisible, let lyrics = player.lyrics, lyrics.isSynced {
-            TimelineView(.periodic(from: .now, by: 0.25)) { context in
-                let index = lyrics.index(at: player.position(at: context.date) + 0.3)
+            PlaybackTimeline(clock: player.clock) { now in
+                let index = lyrics.index(at: player.position(at: now) + 0.3)
                 let line = index.map { lyrics.lines[$0].text } ?? ""
                 ZStack(alignment: .leading) {
                     MarqueeText(text: line.isEmpty ? "♪" : line, font: font, color: Theme.primary, height: height)
@@ -398,8 +409,9 @@ struct LyricsPanel: View {
             if player.lyricsLoading {
                 ProgressView().controlSize(.small).tint(.white)
             } else if let lyrics = player.lyrics, lyrics.isSynced {
-                TimelineView(.periodic(from: .now, by: 0.2)) { context in
-                    SyncedLyrics(lines: lyrics.lines, current: lyrics.index(at: player.position(at: context.date) + 0.3))
+                PlaybackTimeline(clock: player.clock) { now in
+                    SyncedLyrics(lines: lyrics.lines, current: lyrics.index(at: player.position(at: now) + 0.3))
+                        .equatable()
                 }
                 .allowsHitTesting(false)
             } else if let lyrics = player.lyrics, lyrics.instrumental {
@@ -439,7 +451,9 @@ struct PanelMessage: View {
     }
 }
 
-private struct SyncedLyrics: View {
+/// Equatable: the clock ticks four times a second, but the list only needs a new look
+/// when the line changes.
+private struct SyncedLyrics: View, Equatable {
     let lines: [Lyrics.Line]
     let current: Int?
 

@@ -183,11 +183,13 @@ struct RoundButton: View {
 /// Thin bar that thickens when touched. Drag it or click anywhere on it.
 struct ScrubBar: View {
     let fraction: Double
+    /// How fast the fill moves on its own, per second (the playing song). 0: still.
+    var rate: Double = 0
     var fill: Color = Theme.barFill
     var track: Color = Theme.barTrack
     var onChange: (Double) -> Void = { _ in }
     var onCommit: (Double) -> Void = { _ in }
-    /// Progress updates every 0.25 s; this makes the fill move continuously.
+    /// New values glide in (progress) instead of jumping (volume).
     var smoothFill = true
     @State private var active = false
     @Environment(\.uiScale) private var scale
@@ -197,15 +199,16 @@ struct ScrubBar: View {
             let width = max(1, geo.size.width)
             let clamped = max(0, min(1, fraction))
             let height = (active ? Theme.barHeightActive : Theme.barHeight) * scale
-            ZStack(alignment: .leading) {
-                Capsule().fill(track)
-                Rectangle()
-                    .fill(active ? Color.white : fill)
-                    .frame(width: clamped * width)
-                    .animation(active || !smoothFill ? nil : .linear(duration: 0.25), value: clamped)
-            }
+            // Track and fill are Core Animation layers: while a song plays the fill runs
+            // by itself, without SwiftUI redrawing it every frame.
+            ProgressBarLayer(
+                fraction: clamped,
+                rate: active ? 0 : rate,
+                smooth: smoothFill && !active,
+                fill: active ? Color.white : fill,
+                track: track
+            )
             .frame(height: height)
-            .clipShape(Capsule())
             .frame(maxHeight: .infinity)
             .contentShape(Rectangle())
             .gesture(

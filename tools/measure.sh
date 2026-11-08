@@ -19,15 +19,18 @@ if [[ ${#args[@]} -eq 0 ]]; then
 fi
 
 samples=$(( SECS / INTERVAL + 1 ))
-top -l "$samples" -s "$INTERVAL" -c d -stats pid,command,cpu,idlew,power,mem "${args[@]}" |
-  awk -v label="$LABEL" -v interval="$INTERVAL" '
+# Memory is read apart: in delta mode (-c d) top shows how much it changed, not how much it is.
+memory="$(top -l 1 -stats command,mem "${args[@]}" | awk '/^COMMAND/ { on = 1; next } on && NF >= 2 { print $1 "=" $2 }' | tr '\n' ' ')"
+top -l "$samples" -s "$INTERVAL" -c d -stats pid,command,cpu,idlew,power "${args[@]}" |
+  awk -v label="$LABEL" -v interval="$INTERVAL" -v memory="$memory" '
     /^PID/ { sample++; next }
     sample > 1 && $1 ~ /^[0-9]+$/ {
       name = $2
       cpu[name] += $3; idlew[name] += $4; power[name] += $5; n[name]++
-      mem[name] = $6
     }
     END {
+      split(memory, pairs, " ")
+      for (i in pairs) { split(pairs[i], kv, "="); mem[kv[1]] = kv[2] }
       printf "%s\n", label
       printf "  %-8s %7s %13s %7s %8s\n", "process", "CPU %", "wakeups/s", "energy", "memory"
       for (p in n) {

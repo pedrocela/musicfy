@@ -8,7 +8,8 @@ import CoreImage.CIFilterBuiltins
 /// - `frosted`: the whole artwork heavily blurred. It backs the capsules at the top,
 ///   cropped right where each one sits, so you see "through" them.
 ///
-/// Computed once per artwork, off the main thread.
+/// Computed once per artwork, off the main thread. `frosted` is computed small: it's so
+/// blurred that stretching it shows no difference.
 struct ArtworkGlass {
     let progressive: NSImage
     let frosted: NSImage
@@ -58,17 +59,29 @@ struct ArtworkGlass {
         blend.maskImage = mask
         guard let progressive = blend.outputImage?.cropped(to: extent) else { return nil }
 
+        // Blurred this much, a small copy looks exactly the same once stretched, and costs
+        // a sixteenth of the memory and the work.
+        let frostScale = min(1, 320 / side)
+        var small = input
+        if frostScale < 1 {
+            let shrink = CIFilter.lanczosScaleTransform()
+            shrink.inputImage = input
+            shrink.scale = Float(frostScale)
+            shrink.aspectRatio = 1
+            if let output = shrink.outputImage { small = output }
+        }
+        let smallExtent = small.extent.integral
         let gaussian = CIFilter.gaussianBlur()
-        gaussian.inputImage = clamped
-        gaussian.radius = Float(side * 0.06)
+        gaussian.inputImage = small.clampedToExtent()
+        gaussian.radius = Float(side * frostScale * 0.06)
         let frostTone = CIFilter.colorControls()
         frostTone.inputImage = gaussian.outputImage
         frostTone.saturation = 1.15
-        guard let frosted = frostTone.outputImage?.cropped(to: extent) else { return nil }
+        guard let frosted = frostTone.outputImage?.cropped(to: smallExtent) else { return nil }
 
         guard
             let progressiveCG = context.createCGImage(progressive, from: extent),
-            let frostedCG = context.createCGImage(frosted, from: extent)
+            let frostedCG = context.createCGImage(frosted, from: smallExtent)
         else { return nil }
         return ArtworkGlass(
             progressive: NSImage(cgImage: progressiveCG, size: image.size),
