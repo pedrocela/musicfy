@@ -137,13 +137,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     private func observe() {
         watchFullScreen()
-        // Over full-screen apps and videos, only if asked.
+        // Over full-screen video too, only if asked.
         settings.$showOverFullScreen
             .receive(on: RunLoop.main)
-            .sink { [weak self] show in
-                self?.panel.showsOverFullScreen = show
-                self?.checkFullScreen()
-            }
+            .sink { [weak self] _ in self?.checkFullScreen() }
             .store(in: &cancellables)
 
         // The mode chosen in Settings.

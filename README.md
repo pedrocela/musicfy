@@ -3,7 +3,7 @@
 A floating player for **Music and Spotify** on macOS. Always in view: above every
 window and on every Space, also over full-screen apps. It steps aside while a video plays
 in full screen on its display, and comes back when that full screen ends (unless you turn
-on "Show Over Full Screen"). It shows whatever is playing in either app.
+on "Show Over Full-Screen Video"). It shows whatever is playing in either app.
 
 ## Modes
 
