@@ -162,8 +162,11 @@ enum Theme {
     static let smooth = Animation.spring(response: 0.42, dampingFraction: 0.86)
     /// Showing and hiding controls on hover.
     static let fade = Animation.easeInOut(duration: 0.22)
-    /// Artwork, title and color changes between songs.
+    /// Title and color changes between songs (and the artwork with Reduce Motion on).
     static let crossfade = Animation.easeInOut(duration: 0.55)
+    /// A new album: a band of light crosses the artwork from right to left and reveals it.
+    static let albumRevealDuration: TimeInterval = 0.9
+    static let albumReveal = Animation.timingCurve(0.45, 0, 0.2, 1, duration: albumRevealDuration)
     /// Button press response.
     static let press = Animation.spring(response: 0.24, dampingFraction: 0.62)
     /// Window resize duration (AppKit), with a soft ease-out curve.

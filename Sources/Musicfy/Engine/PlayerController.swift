@@ -22,6 +22,9 @@ final class PlayerController: ObservableObject {
     let clock = PlaybackClock()
     @Published private(set) var artwork: NSImage? {
         didSet {
+            // Songs from the same album swap their artwork without a transition.
+            artworkChangedAlbum = artworkAlbumKey != shownAlbumKey
+            shownAlbumKey = artworkAlbumKey
             artworkToken &+= 1
             makeLook()
         }
@@ -32,6 +35,12 @@ final class PlayerController: ObservableObject {
     @Published private(set) var palette = ArtworkPalette.neutral
     /// Changes with every new artwork: the UI uses it for the crossfade.
     @Published private(set) var artworkToken = 0
+    /// Whether the latest artwork change came with a new album (or show): only then the
+    /// artwork animates. Set together with `artworkToken`.
+    private(set) var artworkChangedAlbum = false
+    /// The album the next artwork belongs to, and the one on screen.
+    private var artworkAlbumKey: String?
+    private var shownAlbumKey: String?
     @Published private(set) var lyrics: Lyrics?
     @Published private(set) var lyricsLoading = false
     @Published private(set) var problem: Problem?
@@ -239,7 +248,7 @@ final class PlayerController: ObservableObject {
             positionDate = Date()
         }
         guard let chosen else {
-            if artwork != nil { artwork = nil }
+            if artwork != nil { artworkAlbumKey = nil; artwork = nil }
             artworkKey = nil
             lyrics = nil
             lyricsKey = nil
@@ -283,7 +292,7 @@ final class PlayerController: ObservableObject {
         guard key != artworkKey else { return }
         artworkKey = key
         if let hit = ArtworkLoader.shared.cached(key) {
-            if hit !== artwork { artwork = hit }
+            if hit !== artwork { artworkAlbumKey = state.albumKey; artwork = hit }
             return
         }
         let source = sources[state.source]
@@ -307,7 +316,7 @@ final class PlayerController: ObservableObject {
             }
             guard self.artworkKey == key else { return }
             if let image { ArtworkLoader.shared.store(image, for: key) }
-            if image !== self.artwork { self.artwork = image }
+            if image !== self.artwork { self.artworkAlbumKey = state.albumKey; self.artwork = image }
         }
     }
 
