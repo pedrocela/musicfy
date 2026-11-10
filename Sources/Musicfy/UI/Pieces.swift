@@ -68,21 +68,29 @@ struct SourceGlyph: View {
             Image(systemName: "antenna.radiowaves.left.and.right")
                 .font(.system(size: size * 0.92, weight: .semibold))
                 .foregroundStyle(Theme.sourceColor(.podcasts))
+                .offset(Self.antennaShift(size))
         }
     }
 }
 
 extension SourceGlyph {
-    /// How far to move the `music.note` symbol so it reads centered in its circle.
+    /// How far to move the SF Symbols so they read centered in their circle, measured on
+    /// a 2x capture of the Nothing Playing card (13 pt glyphs in 25 pt circles).
     ///
-    /// Centered by its box, the symbol sat about a point low (measured on a 2x capture
-    /// against the Spotify disc, which is drawn dead center), and the heavy head at the
-    /// bottom left made it read lower and further left still. Half-point steps, so it
-    /// lands on whole pixels on a Retina screen.
+    /// `music.note`: centered by its box it sat about a point low. Half a point up puts
+    /// both its box and its weight on the center; moving it sideways overshot (the box
+    /// ended a pixel right), so it stays put horizontally.
     static func noteShift(_ size: CGFloat) -> CGSize {
-        CGSize(width: halfPoints(size * 0.04), height: halfPoints(-size * 0.075))
+        CGSize(width: 0, height: halfPoints(-size * 0.04))
     }
 
+    /// `antenna.radiowaves.left.and.right`: the stem hangs below the arcs, so by its box
+    /// it sat 1.5 px low. Half a point up splits the difference between box and weight.
+    static func antennaShift(_ size: CGFloat) -> CGSize {
+        CGSize(width: 0, height: halfPoints(-size * 0.04))
+    }
+
+    /// Half-point steps, so the glyph lands on whole pixels on a Retina screen.
     private static func halfPoints(_ value: CGFloat) -> CGFloat { (value * 2).rounded() / 2 }
 }
 
