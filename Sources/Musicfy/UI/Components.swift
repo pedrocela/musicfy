@@ -578,60 +578,80 @@ struct GlassBackdrop<S: InsettableShape>: View {
 }
 
 /// The artwork, crossfading when the song changes.
-/// The artwork, in every mode. A new album (or show) comes into focus: the new artwork
-/// starts soft and a touch larger over the old one and settles sharp. Songs from the same
-/// album swap without any transition, since their artwork is the same.
+/// The artwork, in every mode. A new album (or show) is revealed by a soft band of light
+/// that crosses the artwork from right to left, leaving the new one behind it. Songs from
+/// the same album swap without any transition, since their artwork is the same.
 struct CrossfadingArtwork: View {
     @ObservedObject var player: PlayerController
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        GeometryReader { geo in
-            let side = min(geo.size.width, geo.size.height)
-            let animate = player.artworkChangedAlbum
-            ZStack {
-                ArtworkFill(image: player.artwork)
-                    .id(player.artworkToken)
-                    .zIndex(Double(player.artworkToken))
-                    .transition(animate ? transition(side: side) : .identity)
-            }
-            .animation(animate ? (reduceMotion ? Theme.crossfade : Theme.albumFocus) : nil, value: player.artworkToken)
-            .clipped() // the incoming artwork starts a touch larger
+        let animate = player.artworkChangedAlbum
+        ZStack {
+            ArtworkFill(image: player.artwork)
+                .id(player.artworkToken)
+                .zIndex(Double(player.artworkToken))
+                .transition(animate ? transition : .identity)
         }
+        .animation(animate ? (reduceMotion ? Theme.crossfade : Theme.albumReveal) : nil, value: player.artworkToken)
     }
 
-    private func transition(side: CGFloat) -> AnyTransition {
+    private var transition: AnyTransition {
         if reduceMotion { return .opacity }
-        // The blur follows the size, so the Island's 32 pt thumbnail and a 640 pt
-        // artwork read the same (about 13 pt at 220).
-        let blur = min(max(side * Theme.albumFocusBlur, 2), 24)
         return .asymmetric(
-            insertion: .modifier(
-                active: AlbumFocus(blur: blur, scale: Theme.albumFocusScale, opacity: 0),
-                identity: AlbumFocus(blur: 0, scale: 1, opacity: 1)
-            ),
-            // The old artwork stays put underneath and leaves once the new one covers it.
-            removal: .modifier(
-                active: AlbumFocus(blur: 0, scale: 1, opacity: 0),
-                identity: AlbumFocus(blur: 0, scale: 1, opacity: 1)
-            )
-            .animation(Theme.albumFocusOut)
+            insertion: .modifier(active: AlbumReveal(progress: 0), identity: AlbumReveal(progress: 1)),
+            // The old artwork stays put underneath until the band has crossed it.
+            removal: AnyTransition.opacity.animation(.linear(duration: 0.05).delay(Theme.albumRevealDuration))
         )
     }
 }
 
-private struct AlbumFocus: ViewModifier {
-    let blur: CGFloat
-    let scale: CGFloat
-    let opacity: Double
+/// The new artwork, uncovered up to the band's position, with the light riding on the edge.
+private struct AlbumReveal: ViewModifier, Animatable {
+    var progress: CGFloat
+    var animatableData: CGFloat {
+        get { progress }
+        set { progress = newValue }
+    }
+
+    /// Along the sweep: from the right edge (a little low) to the left (a little high).
+    private static let from = UnitPoint(x: 1.05, y: 0.62)
+    private static let to = UnitPoint(x: -0.05, y: 0.38)
+    /// How soft the edge is, and how wide the band of light, as a share of the sweep.
+    private static let softness: CGFloat = 0.2
+    private static let band: CGFloat = 0.16
 
     func body(content: Content) -> some View {
+        // The edge travels from just before the start to just past the end.
+        let edge = -Self.softness + progress * (1 + 2 * Self.softness)
         content
-            // Opaque: the edges stay solid instead of fading to the background.
-            .blur(radius: blur, opaque: true)
-            .scaleEffect(scale)
-            .opacity(opacity)
+            .mask(
+                LinearGradient(
+                    stops: [
+                        .init(color: .black, location: clamp(edge - Self.softness / 2)),
+                        .init(color: .clear, location: clamp(edge + Self.softness / 2)),
+                    ],
+                    startPoint: Self.from,
+                    endPoint: Self.to
+                )
+            )
+            .overlay(
+                LinearGradient(
+                    stops: [
+                        .init(color: .white.opacity(0), location: clamp(edge - Self.band / 2)),
+                        .init(color: .white.opacity(0.22), location: clamp(edge)),
+                        .init(color: .white.opacity(0), location: clamp(edge + Self.band / 2)),
+                    ],
+                    startPoint: Self.from,
+                    endPoint: Self.to
+                )
+                // The light fades over the last stretch instead of stopping at the edge.
+                .opacity(progress < 0.85 ? 1 : Double((1 - progress) / 0.15))
+                .allowsHitTesting(false)
+            )
     }
+
+    private func clamp(_ x: CGFloat) -> CGFloat { min(max(x, 0), 1) }
 }
 
 // MARK: - Formatting
