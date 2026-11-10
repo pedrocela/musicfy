@@ -55,6 +55,7 @@ struct SourceGlyph: View {
             Image(systemName: "music.note")
                 .font(.system(size: size, weight: .semibold))
                 .foregroundStyle(Theme.sourceColor(.music))
+                .offset(Self.noteShift(size))
         case .spotify:
             let side = size * 17 / 16
             ZStack {
@@ -69,6 +70,20 @@ struct SourceGlyph: View {
                 .foregroundStyle(Theme.sourceColor(.podcasts))
         }
     }
+}
+
+extension SourceGlyph {
+    /// How far to move the `music.note` symbol so it reads centered in its circle.
+    ///
+    /// Centered by its box, the symbol sat about a point low (measured on a 2x capture
+    /// against the Spotify disc, which is drawn dead center), and the heavy head at the
+    /// bottom left made it read lower and further left still. Half-point steps, so it
+    /// lands on whole pixels on a Retina screen.
+    static func noteShift(_ size: CGFloat) -> CGSize {
+        CGSize(width: halfPoints(size * 0.04), height: halfPoints(-size * 0.075))
+    }
+
+    private static func halfPoints(_ value: CGFloat) -> CGFloat { (value * 2).rounded() / 2 }
 }
 
 /// Three arcs, widest on top, slightly tilted, as in Spotify's mark.
@@ -937,7 +952,8 @@ struct EmptyCover: View {
                 Image(systemName: "music.note")
                     .font(.system(size: side * noteScale, weight: .medium))
                     .foregroundStyle(Theme.adaptive(dark: .white, light: NSColor(white: 0, alpha: 0.6)).opacity(noteOpacity))
-                    .offset(y: -geo.size.height * noteLift)
+                    // The head pulls the eye left: a nudge right so the note reads centered.
+                    .offset(x: side * noteScale * 0.04, y: -geo.size.height * noteLift)
             }
             .frame(width: geo.size.width, height: geo.size.height)
         }
