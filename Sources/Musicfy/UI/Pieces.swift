@@ -57,7 +57,8 @@ struct SourceGlyph: View {
                 .foregroundStyle(Theme.sourceColor(.music))
                 .offset(Self.noteShift(size))
         case .spotify:
-            let side = size * 17 / 16
+            // Whole points, so the disc's edge lands on pixels and centers exactly.
+            let side = (size * 17 / 16).rounded()
             ZStack {
                 Circle().fill(Theme.sourceColor(.spotify))
                 SpotifyWaves()
@@ -94,20 +95,21 @@ extension SourceGlyph {
     private static func halfPoints(_ value: CGFloat) -> CGFloat { (value * 2).rounded() / 2 }
 }
 
-/// Three arcs, widest on top, slightly tilted, as in Spotify's mark.
+/// Three arcs, widest on top, as in Spotify's mark. Level, not tilted: a tilt made the
+/// mark read as sitting low and to the left in its circle.
 private struct SpotifyWaves: Shape {
     func path(in rect: CGRect) -> Path {
         let w = rect.width, h = rect.height
         var path = Path()
-        // (vertical position, half width, how much the arc bows, tilt)
-        let waves: [(CGFloat, CGFloat, CGFloat, CGFloat)] = [
-            (0.34, 0.30, 0.10, 0.03),
-            (0.52, 0.25, 0.08, 0.025),
-            (0.69, 0.20, 0.06, 0.02),
+        // (vertical position, half width, how much the arc bows)
+        let waves: [(CGFloat, CGFloat, CGFloat)] = [
+            (0.36, 0.30, 0.10),
+            (0.535, 0.25, 0.08),
+            (0.70, 0.20, 0.06),
         ]
-        for (y, half, bow, tilt) in waves {
-            let start = CGPoint(x: (0.5 - half) * w, y: (y + tilt) * h)
-            let end = CGPoint(x: (0.5 + half) * w, y: (y + tilt * 0.4) * h)
+        for (y, half, bow) in waves {
+            let start = CGPoint(x: (0.5 - half) * w, y: y * h)
+            let end = CGPoint(x: (0.5 + half) * w, y: y * h)
             let control = CGPoint(x: 0.5 * w, y: (y - bow) * h)
             path.move(to: start)
             path.addQuadCurve(to: end, control: control)
