@@ -577,8 +577,7 @@ struct GlassBackdrop<S: InsettableShape>: View {
     }
 }
 
-/// The artwork, crossfading when the song changes.
-/// The artwork, in every mode. A new album (or show) crossfades slowly over the old one;
+/// The artwork, in every mode. A new album (or show) crossfades quickly over the old one;
 /// songs from the same album swap without any transition, since their artwork is the same.
 struct CrossfadingArtwork: View {
     @ObservedObject var player: PlayerController
@@ -591,16 +590,31 @@ struct CrossfadingArtwork: View {
                 .zIndex(Double(player.artworkToken))
                 .transition(animate ? transition : .identity)
         }
+        // The arriving cover starts 2 % larger: keep it inside the frame.
+        .clipped()
         .animation(animate ? Theme.albumFade : nil, value: player.artworkToken)
     }
 
-    /// The new artwork fades in on top; the old one stays put underneath until it's
-    /// covered, so the picture never dims halfway through.
+    /// The new artwork fades in on top, coming into focus and settling from a hair larger;
+    /// the old one stays put underneath until it's covered, so the picture never dims
+    /// halfway through.
     private var transition: AnyTransition {
         .asymmetric(
-            insertion: .opacity,
+            insertion: .modifier(active: ArtworkArrival(progress: 0), identity: ArtworkArrival(progress: 1)),
             removal: AnyTransition.opacity.animation(.linear(duration: 0.05).delay(Theme.albumFadeDuration))
         )
+    }
+}
+
+/// How a new cover arrives: from clear, slightly soft and 2 % larger, to itself.
+private struct ArtworkArrival: ViewModifier {
+    let progress: CGFloat
+
+    func body(content: Content) -> some View {
+        content
+            .opacity(progress)
+            .blur(radius: (1 - progress) * 6)
+            .scaleEffect(1 + (1 - progress) * 0.02)
     }
 }
 
