@@ -860,12 +860,23 @@ struct EmptyStateView: View {
         }
     }
 
-    /// One glass button per installed app. `fill`: they share the row's width.
+    /// One glass button per installed app. `fill`: they share the row's width, each as wide
+    /// as its name needs plus an even share of what's left, so a long name ("Podcasts")
+    /// never gets cut. When the names don't fit, the padding tightens; when they still
+    /// don't, the capsules keep only the glyphs.
     private func buttons(height: CGFloat, fill: Bool) -> some View {
-        HStack(spacing: 8) {
-            ForEach(player.installedSources) { kind in
-                SourceButton(kind: kind, style: .label(height: height, fill: fill)) { player.open(kind) }
+        let sources = player.installedSources
+        func row(padding: CGFloat, names: Bool, spacing: CGFloat) -> some View {
+            FillRow(spacing: spacing, fill: fill) {
+                ForEach(sources) { kind in
+                    SourceButton(kind: kind, style: .label(height: height, padding: padding, name: names)) { player.open(kind) }
+                }
             }
+        }
+        return ViewThatFits(in: .horizontal) {
+            row(padding: 12, names: true, spacing: 8)
+            row(padding: 8, names: true, spacing: 6)
+            row(padding: 12, names: false, spacing: 8)
         }
     }
 
@@ -971,11 +982,49 @@ struct EmptyCover: View {
     }
 }
 
+/// A row of buttons, each at its natural width. With `fill`, what's left of the row is
+/// shared evenly so the row spans the width. Its ideal width is the sum of the natural
+/// widths, which is what lets `ViewThatFits` tell when the names no longer fit.
+private struct FillRow: Layout {
+    var spacing: CGFloat
+    var fill: Bool
+
+    private func natural(_ subviews: Subviews) -> [CGSize] {
+        subviews.map { $0.sizeThatFits(.unspecified) }
+    }
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let sizes = natural(subviews)
+        let ideal = sizes.reduce(0) { $0 + $1.width } + spacing * CGFloat(max(0, sizes.count - 1))
+        let height = sizes.map(\.height).max() ?? 0
+        guard fill, let width = proposal.width, width.isFinite else { return CGSize(width: ideal, height: height) }
+        return CGSize(width: max(width, ideal), height: height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let sizes = natural(subviews)
+        guard !sizes.isEmpty else { return }
+        let ideal = sizes.reduce(0) { $0 + $1.width } + spacing * CGFloat(sizes.count - 1)
+        let extra = fill ? max(0, bounds.width - ideal) / CGFloat(sizes.count) : 0
+        var x = bounds.minX
+        for (subview, size) in zip(subviews, sizes) {
+            let width = size.width + extra
+            subview.place(
+                at: CGPoint(x: x, y: bounds.midY),
+                anchor: .leading,
+                proposal: ProposedViewSize(width: width, height: size.height)
+            )
+            x += width + spacing
+        }
+    }
+}
+
 /// A glass button with the app's own glyph. `.label`: glyph and name in a capsule (full
 /// width of its share of the row when `fill`). `.glyph`: the glyph alone in a glass circle.
 private struct SourceButton: View {
     enum Style {
-        case label(height: CGFloat, fill: Bool)
+        /// `name: false` keeps the capsule but shows only the glyph.
+        case label(height: CGFloat, padding: CGFloat, name: Bool)
         case glyph
     }
 
@@ -997,16 +1046,19 @@ private struct SourceButton: View {
                     .frame(width: 26, height: 26)
                     .background(glass(Circle()))
                     .contentShape(Circle())
-            case let .label(height, fill):
+            case let .label(height, padding, name):
                 HStack(spacing: 7) {
                     SourceGlyph(kind: kind, size: (height * 0.46).rounded())
-                    Text(kind.displayName)
-                        .font(.system(size: max(12, (height * 0.43).rounded()), weight: .semibold))
-                        .foregroundStyle(Theme.primary)
-                        .lineLimit(1)
+                    if name {
+                        Text(kind.displayName)
+                            .font(.system(size: max(12, (height * 0.43).rounded()), weight: .semibold))
+                            .foregroundStyle(Theme.primary)
+                            .lineLimit(1)
+                            .fixedSize()
+                    }
                 }
-                .padding(.horizontal, 12)
-                .frame(maxWidth: fill ? .infinity : nil)
+                .padding(.horizontal, padding)
+                .frame(maxWidth: .infinity)
                 .frame(height: height)
                 .background(glass(Capsule()))
                 .contentShape(Capsule())
