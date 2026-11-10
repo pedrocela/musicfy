@@ -578,16 +578,59 @@ struct GlassBackdrop<S: InsettableShape>: View {
 }
 
 /// The artwork, crossfading when the song changes.
+/// The artwork, in every mode. A new album (or show) comes into focus: the new artwork
+/// starts soft and a touch larger over the old one and settles sharp. Songs from the same
+/// album swap without any transition, since their artwork is the same.
 struct CrossfadingArtwork: View {
     @ObservedObject var player: PlayerController
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        ZStack {
-            ArtworkFill(image: player.artwork)
-                .id(player.artworkToken)
-                .transition(.opacity)
+        GeometryReader { geo in
+            let side = min(geo.size.width, geo.size.height)
+            let animate = player.artworkChangedAlbum
+            ZStack {
+                ArtworkFill(image: player.artwork)
+                    .id(player.artworkToken)
+                    .zIndex(Double(player.artworkToken))
+                    .transition(animate ? transition(side: side) : .identity)
+            }
+            .animation(animate ? (reduceMotion ? Theme.crossfade : Theme.albumFocus) : nil, value: player.artworkToken)
+            .clipped() // the incoming artwork starts a touch larger
         }
-        .animation(Theme.crossfade, value: player.artworkToken)
+    }
+
+    private func transition(side: CGFloat) -> AnyTransition {
+        if reduceMotion { return .opacity }
+        // The blur follows the size, so the Island's 32 pt thumbnail and a 640 pt
+        // artwork read the same (about 13 pt at 220).
+        let blur = min(max(side * Theme.albumFocusBlur, 2), 24)
+        return .asymmetric(
+            insertion: .modifier(
+                active: AlbumFocus(blur: blur, scale: Theme.albumFocusScale, opacity: 0),
+                identity: AlbumFocus(blur: 0, scale: 1, opacity: 1)
+            ),
+            // The old artwork stays put underneath and leaves once the new one covers it.
+            removal: .modifier(
+                active: AlbumFocus(blur: 0, scale: 1, opacity: 0),
+                identity: AlbumFocus(blur: 0, scale: 1, opacity: 1)
+            )
+            .animation(Theme.albumFocusOut)
+        )
+    }
+}
+
+private struct AlbumFocus: ViewModifier {
+    let blur: CGFloat
+    let scale: CGFloat
+    let opacity: Double
+
+    func body(content: Content) -> some View {
+        content
+            // Opaque: the edges stay solid instead of fading to the background.
+            .blur(radius: blur, opaque: true)
+            .scaleEffect(scale)
+            .opacity(opacity)
     }
 }
 

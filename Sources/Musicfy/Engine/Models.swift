@@ -142,6 +142,13 @@ struct PlayerState: Equatable {
         return nil
     }
 
+    /// Identifies the album (for Podcasts, the show): the artwork only animates when this changes.
+    var albumKey: String {
+        let group = source == .podcasts ? (artist.isEmpty ? album : artist) : "\(artist)|\(album)"
+        let key = group.trimmingCharacters(in: .whitespaces).lowercased()
+        return key.isEmpty || key == "|" ? trackKey : "\(source.rawValue)|\(key)"
+    }
+
     /// Identifies the song, to know when to fetch new artwork or lyrics.
     var trackKey: String {
         trackID.isEmpty ? "\(source.rawValue)|\(title)|\(artist)|\(album)" : "\(source.rawValue)|\(trackID)"
