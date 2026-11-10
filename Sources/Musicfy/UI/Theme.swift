@@ -164,8 +164,8 @@ enum Theme {
     static let fade = Animation.easeInOut(duration: 0.22)
     /// Title and color changes between songs.
     static let crossfade = Animation.easeInOut(duration: 0.55)
-    /// A new album: a slow crossfade of the artwork.
-    static let albumFadeDuration: TimeInterval = 0.8
+    /// A new album: a quick crossfade of the artwork.
+    static let albumFadeDuration: TimeInterval = 0.5
     static let albumFade = Animation.easeInOut(duration: albumFadeDuration)
     /// Button press response.
     static let press = Animation.spring(response: 0.24, dampingFraction: 0.62)
