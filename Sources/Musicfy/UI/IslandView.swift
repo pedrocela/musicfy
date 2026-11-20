@@ -116,7 +116,8 @@ struct IslandView: View {
                     PlaybackTimeline(clock: player.clock) { now in
                         IslandLyrics(
                             lines: beats,
-                            current: IslandLyricBeats.index(in: beats, at: player.position(at: now) + 0.3) ?? -1,
+                            // A touch ahead of the song, so the line has settled by the time it's sung.
+                            current: IslandLyricBeats.index(in: beats, at: player.position(at: now) + 0.45) ?? -1,
                             dimmed: !playing,
                             onLine: fitIsland
                         )

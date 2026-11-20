@@ -199,9 +199,9 @@ enum Theme {
     static let islandContentIn = Animation.easeOut(duration: 0.22).delay(0.1)
     /// The Island's karaoke: the lines (and the pill's width) move on one soft spring; the
     /// line leaving fades quickly, the one arriving a beat later.
-    static let lyricLineMove = Animation.spring(response: 0.55, dampingFraction: 0.92)
-    static let lyricLineOut = Animation.easeOut(duration: 0.18)
-    static let lyricLineIn = Animation.easeOut(duration: 0.32).delay(0.08)
+    static let lyricLineMove = Animation.spring(response: 0.42, dampingFraction: 0.9)
+    static let lyricLineOut = Animation.easeOut(duration: 0.14)
+    static let lyricLineIn = Animation.easeOut(duration: 0.2).delay(0.03)
     /// How long the controls stay after the mouse leaves.
     static let hoverExitDelay: TimeInterval = 0.3
     /// Paused this long, the player fades to `pausedAlpha` (full again on hover).
