@@ -242,7 +242,7 @@ struct IslandView: View {
     }
 }
 
-/// The lyric lines as the closed Island shows them: a line too long for the widest pill
+/// The lyric lines as the closed Island shows them: a long line (over 400 pt of text)
 /// plays in two beats. It splits at the punctuation nearest its middle (a comma usually
 /// separates the beats well), else at the space nearest the middle, and the second half
 /// comes in after its share of the line's time, rolling up like a new line.
@@ -254,6 +254,9 @@ final class IslandLyricBeats {
 
     private static let font = NSFont.systemFont(ofSize: Theme.islandLyricSize, weight: .bold)
     private static var room: CGFloat { Theme.islandLyricsMaxWidth - Theme.islandLyricsChrome - 2 }
+    /// Lines wider than this (about half the screen's worth of pill) read better in two beats,
+    /// even when they'd fit in the widest pill.
+    private static let splitAbove: CGFloat = 400
 
     static func width(of text: String) -> CGFloat {
         (text as NSString).size(withAttributes: [.font: font]).width
@@ -264,7 +267,7 @@ final class IslandLyricBeats {
         source = lines
         result = []
         for (i, line) in lines.enumerated() {
-            guard Self.width(of: line.text) > Self.room, let (first, second) = Self.split(line.text) else {
+            guard Self.width(of: line.text) > Self.splitAbove, let (first, second) = Self.split(line.text) else {
                 result.append(line)
                 continue
             }
@@ -285,8 +288,8 @@ final class IslandLyricBeats {
         return found
     }
 
-    /// Where to cut: punctuation nearest the middle whose halves both fit, else the
-    /// space nearest the middle.
+    /// Where to cut: punctuation nearest the middle whose halves both fit (and neither is
+    /// under a quarter of the line), else the space nearest the middle.
     private static func split(_ text: String) -> (String, String)? {
         let chars = Array(text)
         let middle = chars.count / 2
@@ -298,6 +301,8 @@ final class IslandLyricBeats {
         let punctuation: Set<Character> = [",", ";", ":", "—", "–", "?", "!", ")"]
         let marks = chars.indices.filter { punctuation.contains(chars[$0]) && $0 + 1 < chars.count }
         for mark in marks.sorted(by: { abs($0 - middle) < abs($1 - middle) }) {
+            // Not so near an end that one beat is a word or two.
+            guard min(mark + 1, chars.count - mark - 1) * 4 >= chars.count else { continue }
             if let (a, b) = halves(at: mark + 1), width(of: a) <= room, width(of: b) <= room { return (a, b) }
         }
         let spaces = chars.indices.filter { chars[$0] == " " }
