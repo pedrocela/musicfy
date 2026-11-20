@@ -122,7 +122,7 @@ struct ArtworkModeView: View {
                         .transition(.opacity)
                     }
                     .animation(Theme.crossfade, value: player.state?.trackKey)
-                    if density == .large, player.state?.source.supportsFavorite == true {
+                    if density >= .normal, player.state?.source.supportsFavorite == true {
                         RoundButton(
                             symbol: player.state?.favorited == true ? "star.fill" : "star",
                             fill: roundFill,

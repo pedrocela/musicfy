@@ -782,10 +782,9 @@ struct EmptyStateView: View {
     private var compact: some View {
         HStack(spacing: 14) {
             EmptyCover(sources: player.installedSources)
-                .frame(width: Theme.compactArtSide, height: Theme.compactArtSide)
-                .clipShape(RoundedRectangle(cornerRadius: Theme.compactArtRadius, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: Theme.compactArtRadius, style: .continuous).strokeBorder(Theme.coverStroke, lineWidth: 0.5))
-                .shadow(color: Theme.coverShadow, radius: 8, y: 4)
+                .frame(width: Theme.compactCoverSide, height: Theme.compactCoverSide)
+                .clipped()
+                .shadow(color: .black.opacity(0.25), radius: 8, x: 4)
             VStack(alignment: .leading, spacing: 0) {
                 Text("Nothing Playing")
                     .font(Theme.compactTitle)
@@ -812,7 +811,7 @@ struct EmptyStateView: View {
             }
             Spacer(minLength: 0)
         }
-        .padding(.horizontal, Theme.compactInset)
+        .padding(.trailing, Theme.compactInset)
     }
 
     /// Same frame as the open Island while playing: thumbnail and text up top, then one

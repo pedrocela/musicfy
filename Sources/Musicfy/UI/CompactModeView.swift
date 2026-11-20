@@ -23,13 +23,12 @@ struct CompactModeView: View {
                 WindowDragArea(onDoubleClick: panel.actions.toggleArtworkCompact)
             }
 
-            HStack(alignment: .top, spacing: 12) {
+            HStack(alignment: .center, spacing: 14) {
                 CompactCover(player: player, settings: settings, panel: panel, showControls: showControls)
-                    .frame(width: Theme.compactArtSide, height: Theme.compactArtSide)
+                    .frame(width: Theme.compactCoverSide, height: Theme.compactCoverSide)
                 details
                     .frame(height: Theme.compactArtSide)
             }
-            .padding(.leading, Theme.compactInset)
             .padding(.trailing, 14)
             .frame(maxHeight: .infinity)
         }
@@ -119,7 +118,8 @@ private struct CompactCover: View {
     @State private var hovering = false
 
     var body: some View {
-        let shape = RoundedRectangle(cornerRadius: Theme.compactArtRadius, style: .continuous)
+        // Flush with the window's edge, which rounds its outer corners.
+        let shape = Rectangle()
         ZStack(alignment: .bottom) {
             Button {
                 if let kind = player.state?.source { player.open(kind) }
@@ -173,8 +173,8 @@ private struct CompactCover: View {
             }
         }
         .clipShape(shape)
-        .overlay(shape.strokeBorder(Theme.coverStroke, lineWidth: 0.5).allowsHitTesting(false))
-        .shadow(color: Theme.coverShadow, radius: 8, y: 3)
+        // A soft edge on the inside, as in the open Island.
+        .shadow(color: .black.opacity(0.25), radius: 8, x: 4)
         .animation(Theme.fade, value: hovering)
         .animation(Theme.fade, value: showControls)
     }

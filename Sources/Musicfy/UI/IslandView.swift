@@ -12,6 +12,9 @@ struct IslandView: View {
 
     /// The text and ring fade in once the pill is in place (after the morph from the panel).
     @State private var settled = false
+    /// With lyrics on, a new song shows its title and artist for a moment before the
+    /// lines take over: otherwise nothing says what started playing.
+    @State private var announcing = false
 
     private var expanded: Bool { panel.islandExpanded }
     private var accent: Color { Color(nsColor: player.palette.tint) }
@@ -111,7 +114,7 @@ struct IslandView: View {
                 .saturation(playing ? 1 : 0.35)
                 .opacity(playing ? 1 : 0.8)
             Group {
-                if let lyrics = player.lyrics, lyrics.isSynced {
+                if !announcing, let lyrics = player.lyrics, lyrics.isSynced {
                     let beats = IslandLyricBeats.shared.beats(for: lyrics.lines)
                     PlaybackTimeline(clock: player.clock) { now in
                         IslandLyrics(
@@ -124,8 +127,9 @@ struct IslandView: View {
                         .equatable()
                     }
                 } else {
-                    // A new song while its lyrics load: its title, quietly, where the line goes.
-                    Text(player.state?.title ?? "")
+                    // A new song, for a moment and while its lyrics load: its title and
+                    // artist, quietly, where the line goes.
+                    Text(announcement)
                         .font(Theme.islandLyric)
                         .foregroundStyle(Theme.tertiary)
                         .lineLimit(1)
@@ -155,7 +159,19 @@ struct IslandView: View {
             .opacity(settled ? 1 : 0)
         }
         .frame(width: panel.islandLyricsWidth, height: Theme.islandLyrics.height)
+        .animation(Theme.fade, value: announcing)
+        .task(id: player.state?.trackKey) {
+            announcing = true
+            fitIsland(to: announcement)
+            try? await Task.sleep(for: .seconds(2.5))
+            if !Task.isCancelled { announcing = false }
+        }
         .onDisappear { fitIsland(to: nil) }
+    }
+
+    private var announcement: String {
+        guard let state = player.state else { return "" }
+        return state.artist.isEmpty ? state.title : "\(state.title) · \(state.artist)"
     }
 
     /// Widens the lyrics Island when the line being sung doesn't fit, and narrows it back

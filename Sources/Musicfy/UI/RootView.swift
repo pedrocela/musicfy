@@ -153,7 +153,7 @@ struct MorphView: View, Animatable {
             let p = max(0, min(1, progress))
             let start: CGRect = look == .artwork
                 ? CGRect(origin: .zero, size: size)
-                : CGRect(x: Theme.compactInset, y: Theme.compactInset, width: Theme.compactArtSide, height: Theme.compactArtSide)
+                : CGRect(x: 0, y: 0, width: Theme.compactCoverSide, height: Theme.compactCoverSide)
             let end = CGRect(
                 x: Theme.islandThumbInset,
                 y: (size.height - Theme.islandThumb) / 2,
