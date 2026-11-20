@@ -254,9 +254,9 @@ final class IslandLyricBeats {
     private var source: [Lyrics.Line] = []
     private var result: [Lyrics.Line] = []
 
-    /// The lyric's font (Medium italic), to measure lines as they'll be drawn.
+    /// The lyric's font (Bold italic), to measure lines as they'll be drawn.
     private static let font: NSFont = {
-        let base = NSFont.systemFont(ofSize: Theme.islandLyricSize, weight: .medium)
+        let base = NSFont.systemFont(ofSize: Theme.islandLyricSize, weight: .bold)
         let italic = base.fontDescriptor.withSymbolicTraits(.italic)
         return NSFont(descriptor: italic, size: Theme.islandLyricSize) ?? base
     }()
