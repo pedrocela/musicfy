@@ -99,10 +99,12 @@ struct IslandView: View {
     }
 
     /// Lyrics on: only the lyrics, large, rolling up as the song goes, with a peek of the
-    /// line that left and the one coming. The cover and the ring stay at the ends.
+    /// line that left and the one coming. The cover fills the left end; the ring sits at the right.
     private var lyricsRow: some View {
-        HStack(spacing: 12) {
-            thumbnail(side: Theme.islandThumb, radius: Theme.islandThumbRadius)
+        HStack(spacing: 14) {
+            // The cover fills the pill's height, flush with its edge: the pill's own corners
+            // round it on the outside.
+            thumbnail(side: Theme.islandLyrics.height, radius: 0)
                 .saturation(playing ? 1 : 0.35)
                 .opacity(playing ? 1 : 0.8)
             Group {
@@ -133,7 +135,6 @@ struct IslandView: View {
                 .opacity(settled ? 1 : 0)
                 .scaleEffect(settled ? 1 : 0.6)
         }
-        .padding(.leading, Theme.islandThumbInset + 4)
         .padding(.trailing, 15)
         .frame(width: Theme.islandLyrics.width, height: Theme.islandLyrics.height)
     }
