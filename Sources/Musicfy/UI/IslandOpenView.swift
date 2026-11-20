@@ -1,7 +1,8 @@
 import SwiftUI
 
-/// The open Island (on hover), cover-led: the cover floats on the left with its own shadow
-/// and its colors bleed into the Island behind it, so every album paints it differently.
+/// The open Island (on hover), cover-led: the cover runs flush down the left edge, the
+/// Island's full height, and its colors bleed into the rest of it, so every album paints
+/// it differently.
 /// Beside it: title and artist with Lyrics and "…" at the top right; play in a solid circle
 /// with previous and next beside it and the time at the right; a scrubbable bar at the bottom
 /// (the volume takes its place while open).
@@ -10,8 +11,9 @@ struct IslandOpenView: View {
     @ObservedObject var settings: Settings
     @ObservedObject var panel: PanelModel
 
-    private static let cover: CGFloat = 108
-    private static let radius: CGFloat = 5
+    private static let cover = Theme.islandExpanded.height
+    /// The text column, inset from the top and bottom edges.
+    private static let column: CGFloat = 108
 
     var body: some View {
         ZStack {
@@ -33,9 +35,8 @@ struct IslandOpenView: View {
                     Spacer(minLength: 0)
                     bar
                 }
-                .frame(height: Self.cover)
+                .frame(height: Self.column)
             }
-            .padding(.leading, 14)
             .padding(.trailing, 16)
         }
         .frame(width: Theme.islandExpanded.width, height: Theme.islandExpanded.height)
@@ -44,18 +45,17 @@ struct IslandOpenView: View {
 
     /// Clicking it brings the app that's playing to the front.
     private var cover: some View {
-        let shape = RoundedRectangle(cornerRadius: Self.radius, style: .continuous)
-        return Button {
+        Button {
             if let kind = player.state?.source { player.open(kind) }
         } label: {
             CrossfadingArtwork(player: player)
                 .frame(width: Self.cover, height: Self.cover)
-                .clipShape(shape)
-                .overlay(shape.strokeBorder(Theme.coverStroke, lineWidth: 0.5))
-                .contentShape(shape)
+                .clipped()
+                .contentShape(Rectangle())
         }
-        .buttonStyle(PressableStyle())
-        .shadow(color: .black.opacity(0.35), radius: 7, y: 4)
+        .buttonStyle(FlushCoverPress())
+        // The Island's own corners round it on the outside; a soft edge on the inside.
+        .shadow(color: .black.opacity(0.25), radius: 8, x: 4)
         .help(player.state.map { "Open \($0.source.displayName)" } ?? "")
     }
 
@@ -160,5 +160,14 @@ private struct IslandScrubBar: View {
                 }
             )
         }
+    }
+}
+
+/// A flush cover can't shrink on press (it would come off the edge): it only dims a little.
+private struct FlushCoverPress: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .opacity(configuration.isPressed ? 0.85 : 1)
+            .animation(Theme.press, value: configuration.isPressed)
     }
 }
