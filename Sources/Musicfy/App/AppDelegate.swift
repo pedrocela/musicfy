@@ -547,7 +547,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     /// Where the pill sits inside an Island window frame, in screen coordinates.
     private func islandPillRect(inWindow frame: NSRect, expanded: Bool) -> NSRect {
-        let size = expanded ? Theme.islandExpanded : Theme.islandCollapsed
+        let size = expanded ? Theme.islandExpanded : (player.showsIslandLyrics ? Theme.islandLyrics : Theme.islandCollapsed)
         let x = frame.minX + islandPillOffset(width: size.width, alignment: panelModel.islandAlignment)
         return NSRect(x: x, y: frame.maxY - Theme.islandShadowTop - size.height, width: size.width, height: size.height)
     }
