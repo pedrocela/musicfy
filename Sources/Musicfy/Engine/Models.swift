@@ -153,6 +153,11 @@ struct PlayerState: Equatable {
     var trackKey: String {
         trackID.isEmpty ? "\(source.rawValue)|\(title)|\(artist)|\(album)" : "\(source.rawValue)|\(trackID)"
     }
+
+    /// What the lyrics belong to. Spotify can report a new track's id a moment before its
+    /// title and artist: keyed on the id alone, the new song would keep the lyrics looked up
+    /// with the previous one's name (or its length, which the lookup also uses).
+    var lyricsKey: String { "\(trackKey)|\(title)|\(artist)|\(duration.isFinite ? Int(duration.rounded()) : 0)" }
 }
 
 /// Why an app couldn't be read.

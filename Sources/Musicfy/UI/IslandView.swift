@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// Island mode: a 300 × 44 pill under the menu bar. Resting the mouse on it opens it
-/// downward into the widest compact (416 × 136), controls and all.
+/// downward to 416 × 136, controls and all (`IslandOpenView`).
 ///
 /// The window is always the size of the open Island (plus room for the shadow); what
 /// animates is the pill inside. Clicks pass through the transparent part.
@@ -19,7 +19,9 @@ struct IslandView: View {
 
     var body: some View {
         let lyricsMode = player.showsIslandLyrics
-        let size = expanded ? Theme.islandExpanded : (lyricsMode ? Theme.islandLyrics : Theme.islandCollapsed)
+        let size = expanded ? Theme.islandExpanded : (lyricsMode
+            ? CGSize(width: panel.islandLyricsWidth, height: Theme.islandLyrics.height)
+            : Theme.islandCollapsed)
         let shape = RoundedRectangle(cornerRadius: Theme.cornerRadius, style: .continuous)
         VStack(alignment: panel.islandAlignment.horizontal, spacing: 0) {
             ZStack(alignment: .top) {
@@ -64,6 +66,8 @@ struct IslandView: View {
             .scaleEffect(1 + 0.04 * panel.islandPull, anchor: .top)
             .animation(Theme.islandSpring, value: expanded)
             .animation(Theme.islandSpring, value: lyricsMode)
+            // The pill follows the line with the line's own spring, so width and text move as one.
+            .animation(Theme.lyricLineMove, value: panel.islandLyricsWidth)
             Spacer(minLength: 0)
         }
         .padding(.horizontal, Theme.islandShadowSide)
@@ -98,7 +102,7 @@ struct IslandView: View {
         }
     }
 
-    /// Lyrics on: only the line being sung, large, rolling up as the song goes. The cover fills the left end; the ring sits at the right.
+    /// Lyrics on: only the line being sung, large, rolling up as the song goes. The cover fills the left end; the progress is a hairline along the bottom.
     private var lyricsRow: some View {
         HStack(spacing: 14) {
             // The cover fills the pill's height, flush with its edge: the pill's own corners
@@ -108,11 +112,14 @@ struct IslandView: View {
                 .opacity(playing ? 1 : 0.8)
             Group {
                 if let lyrics = player.lyrics, lyrics.isSynced {
+                    let beats = IslandLyricBeats.shared.beats(for: lyrics.lines)
                     PlaybackTimeline(clock: player.clock) { now in
                         IslandLyrics(
-                            lines: lyrics.lines,
-                            current: lyrics.index(at: player.position(at: now) + 0.3) ?? -1,
-                            dimmed: !playing
+                            lines: beats,
+                            // A touch ahead of the song, so the line has settled by the time it's sung.
+                            current: IslandLyricBeats.index(in: beats, at: player.position(at: now) + 0.45) ?? -1,
+                            dimmed: !playing,
+                            onLine: fitIsland
                         )
                         .equatable()
                     }
@@ -126,16 +133,41 @@ struct IslandView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
+            .padding(.trailing, 16)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .allowsHitTesting(false)
             .opacity(settled ? 1 : 0)
-
-            ProgressRing(player: player, playing: playing, accent: accent)
-                .opacity(settled ? 1 : 0)
-                .scaleEffect(settled ? 1 : 0.6)
         }
-        .padding(.trailing, 15)
-        .frame(width: Theme.islandLyrics.width, height: Theme.islandLyrics.height)
+        // The song's progress: a hairline along the bottom edge, beside the cover, so the
+        // line gets the whole width.
+        .overlay(alignment: .bottom) {
+            PlaybackTimeline(clock: player.clock) { _ in
+                ProgressBarLayer(
+                    fraction: player.progressFraction(),
+                    rate: player.progressRate,
+                    fill: playing ? accent : Theme.quaternary,
+                    track: Theme.ink.opacity(0.1)
+                )
+            }
+            .frame(height: 2)
+            .padding(.leading, Theme.islandLyrics.height)
+            .allowsHitTesting(false)
+            .opacity(settled ? 1 : 0)
+        }
+        .frame(width: panel.islandLyricsWidth, height: Theme.islandLyrics.height)
+        .onDisappear { fitIsland(to: nil) }
+    }
+
+    /// Widens the lyrics Island when the line being sung doesn't fit, and narrows it back
+    /// to the usual width when it does. Past the widest, the line shrinks to fit.
+    private func fitIsland(to line: String?) {
+        var width = Theme.islandLyrics.width
+        if let line, !line.isEmpty {
+            // The pill hugs the line: no dead space after a short one.
+            let text = IslandLyricBeats.width(of: line)
+            width = min(Theme.islandLyricsMaxWidth, max(Theme.islandLyricsMinWidth, ceil(text) + Theme.islandLyricsChrome + 2))
+        }
+        if panel.islandLyricsWidth != width { panel.islandLyricsWidth = width }
     }
 
     private var playingRow: some View {
@@ -193,14 +225,14 @@ struct IslandView: View {
 
     // MARK: Open
 
-    /// The same layout as compact on hover, so the two read as one player.
+    /// Cover-led: the cover floats and its colors tint the Island (`IslandOpenView`).
     @ViewBuilder
     private var expandedContent: some View {
         Group {
             if player.state == nil {
                 EmptyStateView(player: player)
             } else {
-                CompactModeView(player: player, settings: settings, panel: panel, inIsland: true)
+                IslandOpenView(player: player, settings: settings, panel: panel)
             }
         }
         .frame(width: Theme.islandExpanded.width, height: Theme.islandExpanded.height, alignment: .top)
@@ -212,6 +244,84 @@ struct IslandView: View {
     }
 }
 
+/// The lyric lines as the closed Island shows them: a long line (over 400 pt of text)
+/// plays in two beats. It splits at the punctuation nearest its middle (a comma usually
+/// separates the beats well), else at the space nearest the middle, and the second half
+/// comes in after its share of the line's time, rolling up like a new line.
+@MainActor
+final class IslandLyricBeats {
+    static let shared = IslandLyricBeats()
+    private var source: [Lyrics.Line] = []
+    private var result: [Lyrics.Line] = []
+
+    /// The lyric's font (Medium italic), to measure lines as they'll be drawn.
+    private static let font: NSFont = {
+        let base = NSFont.systemFont(ofSize: Theme.islandLyricSize, weight: .medium)
+        let italic = base.fontDescriptor.withSymbolicTraits(.italic)
+        return NSFont(descriptor: italic, size: Theme.islandLyricSize) ?? base
+    }()
+    private static var room: CGFloat { Theme.islandLyricsMaxWidth - Theme.islandLyricsChrome - 2 }
+    /// Lines wider than this (about half the screen's worth of pill) read better in two beats,
+    /// even when they'd fit in the widest pill.
+    private static let splitAbove: CGFloat = 400
+
+    static func width(of text: String) -> CGFloat {
+        (text as NSString).size(withAttributes: [.font: font]).width
+    }
+
+    func beats(for lines: [Lyrics.Line]) -> [Lyrics.Line] {
+        if lines == source { return result }
+        source = lines
+        result = []
+        for (i, line) in lines.enumerated() {
+            guard Self.width(of: line.text) > Self.splitAbove, let (first, second) = Self.split(line.text) else {
+                result.append(line)
+                continue
+            }
+            // The time to the next line often includes a pause after this one is sung: spread
+            // the halves over about how long the words take (~0.11 s a character), not the
+            // whole gap, or the second half comes in late.
+            let gap = (i + 1 < lines.count ? lines[i + 1].time : line.time + 6) - line.time
+            let sung = min(gap, Double(line.text.count) * 0.11 + 0.3)
+            let share = Double(first.count) / Double(max(1, first.count + second.count))
+            result.append(Lyrics.Line(time: line.time, text: first))
+            result.append(Lyrics.Line(time: line.time + sung * share, text: second))
+        }
+        return result
+    }
+
+    static func index(in lines: [Lyrics.Line], at position: Double) -> Int? {
+        var low = 0, high = lines.count - 1, found: Int?
+        while low <= high {
+            let mid = (low + high) / 2
+            if lines[mid].time <= position { found = mid; low = mid + 1 } else { high = mid - 1 }
+        }
+        return found
+    }
+
+    /// Where to cut: punctuation nearest the middle whose halves both fit (and neither is
+    /// under a quarter of the line), else the space nearest the middle.
+    private static func split(_ text: String) -> (String, String)? {
+        let chars = Array(text)
+        let middle = chars.count / 2
+        func halves(at cut: Int) -> (String, String)? {
+            let a = String(chars[..<cut]).trimmingCharacters(in: .whitespaces)
+            let b = String(chars[cut...]).trimmingCharacters(in: .whitespaces)
+            return a.isEmpty || b.isEmpty ? nil : (a, b)
+        }
+        let punctuation: Set<Character> = [",", ";", ":", "—", "–", "?", "!", ")"]
+        let marks = chars.indices.filter { punctuation.contains(chars[$0]) && $0 + 1 < chars.count }
+        for mark in marks.sorted(by: { abs($0 - middle) < abs($1 - middle) }) {
+            // Not so near an end that one beat is a word or two.
+            guard min(mark + 1, chars.count - mark - 1) * 4 >= chars.count else { continue }
+            if let (a, b) = halves(at: mark + 1), width(of: a) <= room, width(of: b) <= room { return (a, b) }
+        }
+        let spaces = chars.indices.filter { chars[$0] == " " }
+        guard let space = spaces.min(by: { abs($0 - middle) < abs($1 - middle) }) else { return nil }
+        return halves(at: space)
+    }
+}
+
 /// The closed Island's karaoke: only the current line, large in the middle. When the line
 /// changes, the next one rises from below and grows into place while the old one rises,
 /// shrinks and fades away.
@@ -220,6 +330,8 @@ private struct IslandLyrics: View, Equatable {
     /// -1 before the first line.
     let current: Int
     let dimmed: Bool
+    /// Told the line being sung each time it changes, so the pill can fit it.
+    let onLine: @MainActor (String?) -> Void
 
     static func == (a: Self, b: Self) -> Bool {
         a.current == b.current && a.dimmed == b.dimmed && a.lines == b.lines
@@ -237,15 +349,24 @@ private struct IslandLyrics: View, Equatable {
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .scaleEffect(distance == 0 ? 1 : 0.58, anchor: .leading)
-                    .opacity(distance == 0 ? (dimmed ? 0.6 : 1) : 0)
-                    .blur(radius: distance == 0 ? 0 : 0.4)
+                    // The line leaving fades fast as it starts to rise; the one arriving fades
+                    // in a beat later, once it's on its way, so the two never sit on top of
+                    // each other at half strength.
+                    .animation(distance == 0 ? Theme.lyricLineIn : Theme.lyricLineOut) {
+                        $0.opacity(distance == 0 ? (dimmed ? 0.6 : 1) : 0)
+                    }
+                    // Rising and settling: a small step in size and a soft focus, not a jump.
+                    .scaleEffect(distance == 0 ? 1 : 0.86, anchor: .leading)
+                    .blur(radius: distance == 0 ? 0 : 2.5)
                     .offset(y: CGFloat(distance) * row)
                     .transition(.opacity)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-        .animation(.spring(response: 0.5, dampingFraction: 0.9), value: current)
+        .animation(Theme.lyricLineMove, value: current)
+        // What's shown, "♪" included: an instrumental break gets the narrowest pill, not the
+        // default width.
+        .task(id: current) { onLine(text(at: current)) }
         .animation(Theme.fade, value: dimmed)
         .mask(
             LinearGradient(

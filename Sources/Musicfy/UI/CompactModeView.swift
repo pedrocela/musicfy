@@ -3,7 +3,7 @@ import SwiftUI
 /// Compact mode (320 × 136) on a background tinted with the artwork's color.
 /// At rest it's quiet: a big cover, the title and artist, and a hairline of progress.
 /// On hover the times, the transport and the top buttons (over the cover) fade in.
-/// The open Island is this same view with the controls showing, on the Island's own background.
+/// (The open Island has its own layout: `IslandOpenView`.)
 /// Follows the system appearance: a deep tint with white text, or a pale tint with dark text.
 struct CompactModeView: View {
     @ObservedObject var player: PlayerController

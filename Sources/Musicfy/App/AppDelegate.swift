@@ -198,11 +198,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             .receive(on: RunLoop.main)
             .sink { [weak self] drawer in
                 guard let self else { return }
-                self.player.lyricsVisible = drawer == .lyrics
+                // The Island has no drawer: its lyrics follow the remembered switch.
+                if self.panelModel.mode != .island {
+                    self.player.lyricsVisible = drawer == .lyrics
+                }
                 self.player.queueVisible = drawer == .queue
                 if self.panelModel.mode != .island, !self.transitioning {
                     self.animateFrame(to: self.framedRect(for: self.panelModel.mode))
                 }
+            }
+            .store(in: &cancellables)
+
+        // Entering the Island (also at launch): lyrics as they were left there.
+        panelModel.$mode
+            .removeDuplicates()
+            .receive(on: RunLoop.main)
+            .sink { [weak self] mode in
+                guard let self, mode == .island else { return }
+                self.player.lyricsVisible = self.settings.islandLyrics
             }
             .store(in: &cancellables)
 
@@ -513,7 +526,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     // Island: top center of the screen with the menu bar.
     private var islandWindowSize: CGSize {
         CGSize(
-            width: Theme.islandExpanded.width + Theme.islandShadowSide * 2,
+            // Room for the lyrics Island at its widest; the rest is transparent and lets clicks through.
+            width: max(Theme.islandExpanded.width, Theme.islandLyricsMaxWidth) + Theme.islandShadowSide * 2,
             height: Theme.islandShadowTop + Theme.islandExpanded.height + Theme.islandShadowBottom
         )
     }
@@ -547,7 +561,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     /// Where the pill sits inside an Island window frame, in screen coordinates.
     private func islandPillRect(inWindow frame: NSRect, expanded: Bool) -> NSRect {
-        let size = expanded ? Theme.islandExpanded : (player.showsIslandLyrics ? Theme.islandLyrics : Theme.islandCollapsed)
+        let size = expanded ? Theme.islandExpanded : (player.showsIslandLyrics
+            ? CGSize(width: panelModel.islandLyricsWidth, height: Theme.islandLyrics.height)
+            : Theme.islandCollapsed)
         let x = frame.minX + islandPillOffset(width: size.width, alignment: panelModel.islandAlignment)
         return NSRect(x: x, y: frame.maxY - Theme.islandShadowTop - size.height, width: size.width, height: size.height)
     }

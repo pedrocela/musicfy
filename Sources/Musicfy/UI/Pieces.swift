@@ -331,6 +331,7 @@ struct ToolbarIcons: View {
                 icon(lyricsActive ? "quote.bubble.fill" : "quote.bubble", "Lyrics", active: lyricsActive) {
                     if panel.mode == .island {
                         player.lyricsVisible.toggle()
+                        settings.islandLyrics = player.lyricsVisible
                     } else {
                         panel.drawer = panel.drawer == .lyrics ? .none : .lyrics
                     }
@@ -345,7 +346,7 @@ struct ToolbarIcons: View {
                 icon("airplayaudio", "Audio Output") { panel.actions.showOutputMenu() }
             }
             if settings.showVolume, kind?.hasAppVolume != false {
-                icon(volumeSymbol, "Volume", active: panel.volumeOpen) { panel.volumeOpen.toggle() }
+                icon(volumeSymbol, "Volume") { panel.volumeOpen.toggle() }
             }
             if let modeSwitch {
                 icon(
@@ -370,18 +371,16 @@ struct ToolbarIcons: View {
         }
     }
 
-    private func icon(_ symbol: String, _ help: String, active: Bool = false, _ action: @escaping () -> Void) -> some View {
+    /// Toggles (Lyrics, Up Next) show their state by brightness: full when on,
+    /// faded when off. Plain buttons (`active` nil) stay full.
+    private func icon(_ symbol: String, _ help: String, active: Bool? = nil, _ action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: symbol)
                 .font(.system(size: iconSize * scale, weight: .semibold))
                 .foregroundStyle(tint)
+                .opacity(active == false ? 0.45 : 1)
                 .contentTransition(.symbolEffect(.replace))
                 .frame(width: cell * scale, height: cell * scale)
-                .background(
-                    Circle()
-                        .fill(Color.white.opacity(active ? 0.24 : 0))
-                        .padding(2)
-                )
                 .contentShape(Rectangle())
                 .animation(Theme.fade, value: active)
         }

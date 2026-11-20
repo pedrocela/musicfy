@@ -74,7 +74,7 @@ final class LyricsLoader {
     }
 
     func lyrics(for state: PlayerState) async -> Lyrics? {
-        let key = state.trackKey
+        let key = state.lyricsKey
         lock.lock()
         if let hit = cache[key] { lock.unlock(); return hit }
         lock.unlock()
