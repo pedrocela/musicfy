@@ -138,9 +138,18 @@ struct IslandView: View {
         }
     }
 
-    /// Lyrics on: only the line being sung, large and centered over the cover's blurred colors; the progress is a hairline along the bottom.
+    /// Lyrics on: only the line being sung, large and centered over the cover's blurred colors, with the cover itself at the left end; the progress is a hairline along the bottom.
     private var lyricsRow: some View {
         HStack(spacing: 0) {
+            // The cover itself, sharp, at the left end; its blurred colors fill the rest.
+            CrossfadingArtwork(player: player)
+                .saturation(playing ? 1 : 0.3)
+                .brightness(playing ? 0 : -0.12)
+                .animation(Theme.fade, value: playing)
+                .frame(width: Theme.islandLyricsCover, height: Theme.islandLyricsCover)
+                .clipped()
+                .allowsHitTesting(false)
+                .opacity(settled ? 1 : 0)
             Group {
                 if let lyrics = player.lyrics, lyrics.isSynced {
                     let beats = IslandLyricBeats.shared.beats(for: lyrics.lines)
@@ -169,8 +178,8 @@ struct IslandView: View {
                         .task(id: announcement) { fitIsland(to: announcement) }
                 }
             }
-            // Even on both sides, so the line sits in the middle of the pill.
-            .padding(.horizontal, Theme.islandLyricsChrome / 2)
+            // Even on both sides, so the line sits in the middle of the room beside the cover.
+            .padding(.horizontal, Theme.islandLyricsMargins / 2)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .allowsHitTesting(false)
             .opacity(settled ? 1 : 0)
