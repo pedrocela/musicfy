@@ -37,6 +37,8 @@ enum Theme {
     static let islandLyricsMinWidth: CGFloat = 220
     /// Around the line: the left and right margins (the cover is the pill's background).
     static var islandLyricsChrome: CGFloat { islandTextInset + 16 }
+    /// How far out of focus the cover goes behind the lyric line: colors, no shapes.
+    static let islandLyricsBlur: CGFloat = 30
     /// The open Island is compact on hover at its widest: same layout, 416 × 136.
     static let islandExpanded = CGSize(width: compactWidthRange.upperBound, height: compactSize.height)
     /// One corner for every mode, generous and soft: artwork and compact round at 28 pt,
