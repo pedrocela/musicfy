@@ -98,8 +98,7 @@ struct IslandView: View {
         }
     }
 
-    /// Lyrics on: only the lyrics, large, rolling up as the song goes, with a peek of the
-    /// line that left and the one coming. The cover fills the left end; the ring sits at the right.
+    /// Lyrics on: only the line being sung, large, rolling up as the song goes. The cover fills the left end; the ring sits at the right.
     private var lyricsRow: some View {
         HStack(spacing: 14) {
             // The cover fills the pill's height, flush with its edge: the pill's own corners
@@ -213,9 +212,9 @@ struct IslandView: View {
     }
 }
 
-/// The closed Island's karaoke: the current line large in the middle, the one before and
-/// the one after much smaller and faded above and below, cut by the pill's edges. When the
-/// line changes they roll up together: the next one grows into place, the old one shrinks.
+/// The closed Island's karaoke: only the current line, large in the middle. When the line
+/// changes, the next one rises from below and grows into place while the old one rises,
+/// shrinks and fades away.
 private struct IslandLyrics: View, Equatable {
     let lines: [Lyrics.Line]
     /// -1 before the first line.
@@ -239,7 +238,7 @@ private struct IslandLyrics: View, Equatable {
                     .minimumScaleFactor(0.7)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .scaleEffect(distance == 0 ? 1 : 0.58, anchor: .leading)
-                    .opacity(distance == 0 ? (dimmed ? 0.6 : 1) : abs(distance) == 1 ? 0.45 : 0)
+                    .opacity(distance == 0 ? (dimmed ? 0.6 : 1) : 0)
                     .blur(radius: distance == 0 ? 0 : 0.4)
                     .offset(y: CGFloat(distance) * row)
                     .transition(.opacity)
