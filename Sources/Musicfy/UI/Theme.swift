@@ -78,7 +78,7 @@ enum Theme {
     static let islandTitle = Font.system(size: 13, weight: .semibold)
     static let islandSubtitle = Font.system(size: 11)
     static let islandLyricSize: CGFloat = 21
-    static let islandLyric = Font.system(size: islandLyricSize, weight: .medium)
+    static let islandLyric = Font.system(size: islandLyricSize, weight: .medium).italic()
     static let islandOpenTitle = Font.system(size: 15, weight: .semibold)
     static let lyric = Font.system(size: 21, weight: .bold)
 
