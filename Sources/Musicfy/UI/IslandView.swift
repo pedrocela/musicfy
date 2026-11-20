@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// Island mode: a 300 × 44 pill under the menu bar. Resting the mouse on it opens it
-/// downward into the widest compact (416 × 136), controls and all.
+/// downward to 416 × 136, controls and all (`IslandOpenView`).
 ///
 /// The window is always the size of the open Island (plus room for the shadow); what
 /// animates is the pill inside. Clicks pass through the transparent part.
@@ -223,14 +223,14 @@ struct IslandView: View {
 
     // MARK: Open
 
-    /// The same layout as compact on hover, so the two read as one player.
+    /// Cover-led: the cover floats and its colors tint the Island (`IslandOpenView`).
     @ViewBuilder
     private var expandedContent: some View {
         Group {
             if player.state == nil {
                 EmptyStateView(player: player)
             } else {
-                CompactModeView(player: player, settings: settings, panel: panel, inIsland: true)
+                IslandOpenView(player: player, settings: settings, panel: panel)
             }
         }
         .frame(width: Theme.islandExpanded.width, height: Theme.islandExpanded.height, alignment: .top)
