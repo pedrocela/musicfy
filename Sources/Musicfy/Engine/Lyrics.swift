@@ -74,31 +74,66 @@ final class LyricsLoader {
     }
 
     func lyrics(for state: PlayerState) async -> Lyrics? {
+        if case .found(let lyrics) = await lookup(for: state) { return lyrics }
+        return nil
+    }
+
+    /// Asks for the song as it is named; then searches by title and artist; then, if the
+    /// title carries a suffix LRCLIB doesn't know it by ("- 2011 Remaster", "(feat. …)"),
+    /// searches again without it. `failed` means some request didn't get an answer and
+    /// nothing was found: worth asking again in a moment.
+    func lookup(for state: PlayerState) async -> Lookup {
         let key = state.lyricsKey
         lock.lock()
-        if let hit = cache[key] { lock.unlock(); return hit }
+        if let hit = cache[key] {
+            lock.unlock()
+            return hit.map(Lookup.found) ?? .missing
+        }
         lock.unlock()
 
-        let first = await exact(state)
-        let result: Lookup
-        if case .found = first { result = first } else { result = await search(state) }
+        var failed = false
+        var result = await exact(state)
+        if case .failed = result { failed = true }
+        if case .found = result {} else {
+            result = await search(state, title: state.title)
+            if case .failed = result { failed = true }
+        }
+        let clean = Self.cleanTitle(state.title)
+        if case .found = result {} else if clean != state.title {
+            result = await search(state, title: clean)
+            if case .failed = result { failed = true }
+        }
 
         let lyrics: Lyrics?
-        switch (first, result) {
-        case (_, .found(let found)):
+        if case .found(let found) = result {
             lyrics = found
-        case (.missing, .missing):
-            lyrics = nil // LRCLIB really has nothing for it
-        default:
+        } else if failed {
             // A request failed: don't remember "no lyrics", ask again next time.
             Log.network.info("Lyrics lookup failed; not cached")
-            return nil
+            return .failed
+        } else {
+            lyrics = nil // LRCLIB really has nothing for it
         }
         lock.lock()
         cache[key] = lyrics
         if cache.count > 200 { cache.removeAll() }
         lock.unlock()
-        return lyrics
+        return lyrics.map(Lookup.found) ?? .missing
+    }
+
+    /// The title without what the apps add to it and LRCLIB usually doesn't have:
+    /// "Heroes - 2017 Remaster" → "Heroes", "Song (feat. Someone)" → "Song".
+    static func cleanTitle(_ title: String) -> String {
+        let words = "feat\\.?|ft\\.?|featuring|remaster(ed)?|version|edit|mix|live|mono|stereo|deluxe|bonus|single|acoustic|demo|anniversary|explicit"
+        var clean = title
+        for pattern in [
+            "\\s*[\\(\\[][^\\)\\]]*\\b(\(words))\\b[^\\)\\]]*[\\)\\]]",
+            "\\s+[-–—]\\s+[^-–—]*\\b(\(words))\\b[^-–—]*$",
+        ] {
+            clean = clean.replacingOccurrences(of: pattern, with: "", options: [.regularExpression, .caseInsensitive])
+        }
+        clean = clean.trimmingCharacters(in: .whitespaces)
+        return clean.isEmpty ? title : clean
     }
 
     private func exact(_ state: PlayerState) async -> Lookup {
@@ -117,10 +152,10 @@ final class LyricsLoader {
     }
 
     /// Without an exact match, the first one with synced lyrics and a similar duration.
-    private func search(_ state: PlayerState) async -> Lookup {
+    private func search(_ state: PlayerState, title: String) async -> Lookup {
         var components = URLComponents(string: "https://lrclib.net/api/search")!
         components.queryItems = [
-            URLQueryItem(name: "track_name", value: state.title),
+            URLQueryItem(name: "track_name", value: title),
             URLQueryItem(name: "artist_name", value: state.artist),
         ]
         guard let data = await get(components.url) else { return .failed }

@@ -1,69 +1,120 @@
 import SwiftUI
 
-/// Compact mode (320 × 136) on a background tinted with the artwork's color.
-/// At rest it's quiet: a big cover, the title and artist, and a hairline of progress.
-/// On hover the times, the transport and the top buttons (over the cover) fade in.
+/// Compact mode (320 × 136): the cover is the window. It fills the whole surface, cropped
+/// to its middle band, under a veil that darkens toward the left, where the text sits.
+/// At rest it's quiet: title, artist and a line of progress along the bottom edge.
+/// On hover the top buttons, the times and the transport fade in.
 /// (The open Island has its own layout: `IslandOpenView`.)
-/// Follows the system appearance: a deep tint with white text, or a pale tint with dark text.
+/// The text stays white over the cover in both appearances, as in artwork mode.
 struct CompactModeView: View {
     @ObservedObject var player: PlayerController
     @ObservedObject var settings: Settings
     @ObservedObject var panel: PanelModel
-    var inIsland = false
 
-    private var showControls: Bool { inIsland || panel.isHovering || panel.volumeOpen }
+    private var showControls: Bool { panel.isHovering || panel.volumeOpen }
+    private var paused: Bool { player.state?.isPlaying == false }
 
     var body: some View {
         ZStack {
-            if !inIsland {
-                Color(nsColor: player.palette.backdrop)
-                    .animation(Theme.crossfade, value: player.palette)
-                LinearGradient(colors: [Theme.sheen, .clear], startPoint: .top, endPoint: .center)
-                    .allowsHitTesting(false)
-                WindowDragArea(onDoubleClick: panel.actions.toggleArtworkCompact)
-            }
+            Color(nsColor: player.palette.background)
+            // Paused: the cover loses its color, so it reads at a glance.
+            CrossfadingArtwork(player: player)
+                .saturation(paused ? 0.3 : 1)
+                .brightness(paused ? -0.12 : 0)
+            LinearGradient(
+                stops: [
+                    .init(color: .black.opacity(0.84), location: 0),
+                    .init(color: .black.opacity(0.5), location: 0.55),
+                    .init(color: .black.opacity(0.08), location: 1),
+                ],
+                startPoint: .leading,
+                endPoint: .trailing
+            )
+            .allowsHitTesting(false)
+            // With the controls out, the veil evens out so they read across the whole width.
+            Color.black.opacity(showControls ? 0.34 : 0)
+                .allowsHitTesting(false)
+            WindowDragArea(onDoubleClick: panel.actions.toggleArtworkCompact)
 
-            HStack(alignment: .top, spacing: 12) {
-                CompactCover(player: player, settings: settings, panel: panel, showControls: showControls)
-                    .frame(width: Theme.compactArtSide, height: Theme.compactArtSide)
-                details
-                    .frame(height: Theme.compactArtSide)
+            details
+                .padding(.horizontal, 20)
+                .frame(height: Theme.compactArtSide)
+                .frame(maxHeight: .infinity)
+
+            if !showControls {
+                EdgeProgress(player: player, fill: Color(nsColor: player.palette.accent))
+                    .frame(maxHeight: .infinity, alignment: .bottom)
+                    .transition(.opacity)
             }
-            .padding(.leading, Theme.compactInset)
-            .padding(.trailing, 14)
-            .frame(maxHeight: .infinity)
         }
+        .environment(\.colorScheme, .dark)
         .environment(\.marqueeOnLayer, true)
         .animation(Theme.smooth, value: showControls)
+        .animation(Theme.fade, value: paused)
     }
 
-    /// Title and artist; under them the hairline at rest, or the times and transport on hover.
+    /// Title and artist; on hover the top buttons beside them and the times and transport below.
     private var details: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // At rest the title sits in the middle of the free space; on hover it rises
-            // to the top to make room for the controls.
+            // At rest the title sits in the middle; on hover it rises to make room for the controls.
             if !showControls { Spacer(minLength: 0) }
-            title
-            Spacer(minLength: 0)
-            ZStack(alignment: .bottom) {
+            HStack(alignment: .top, spacing: 8) {
+                title
                 if showControls {
-                    controls
-                        .transition(.opacity.combined(with: .offset(y: 6)))
-                } else {
-                    Hairline(player: player)
-                        .padding(.bottom, 1)
+                    topButtons
+                        .transition(.opacity)
+                } else if paused {
+                    Image(systemName: "pause.fill")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(Color.white)
+                        .frame(width: 26, height: 26)
+                        .background(Circle().fill(Color.white.opacity(0.2)))
+                        .padding(.top, 4)
+                        .allowsHitTesting(false)
                         .transition(.opacity)
                 }
             }
+            Spacer(minLength: 0)
+            if showControls {
+                controls
+                    .transition(.opacity.combined(with: .offset(y: 6)))
+            }
         }
+    }
+
+    /// Lyrics, Up Next, volume and the "…" menu, at the top right.
+    private var topButtons: some View {
+        HStack(spacing: 0) {
+            ToolbarIcons(
+                player: player,
+                settings: settings,
+                panel: panel,
+                iconSize: 12,
+                cell: 22,
+                tint: Color.white.opacity(0.92),
+                includesOutput: false
+            )
+            Button(action: panel.actions.showMenu) {
+                Image(systemName: "ellipsis")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Color.white.opacity(0.92))
+                    .frame(width: 22, height: 22)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(PressableStyle())
+            .help("More Options")
+        }
+        .shadow(color: .black.opacity(0.3), radius: 3, y: 1)
+        .padding(.trailing, -6)
+        .fixedSize()
     }
 
     private var title: some View {
         ZStack(alignment: .leading) {
             VStack(alignment: .leading, spacing: 2) {
-                MarqueeText(text: player.state?.title ?? "", font: Theme.compactTitle, color: Theme.primary, height: 19)
-                // In the Island, the Lyrics button swaps the subtitle for the line being sung.
-                SubtitleLine(player: player, font: Theme.compactSubtitle, height: 16, showsLyric: inIsland)
+                // At rest a long title stays still, cut off with the fade; it scrolls on hover.
+                MarqueeText(text: player.state?.title ?? "", font: Theme.compactTitle, color: Theme.primary, height: 19, scrolls: showControls)
+                SubtitleLine(player: player, font: Theme.compactSubtitle, height: 16, showsLyric: false)
             }
             .id(player.state?.trackKey ?? "")
             .transition(.opacity)
@@ -87,103 +138,22 @@ struct CompactModeView: View {
     }
 }
 
-/// Song progress at rest: a thin line, no times.
-private struct Hairline: View {
+/// Song progress at rest: a thin line along the window's bottom edge, in the cover's accent.
+struct EdgeProgress: View {
     @ObservedObject var player: PlayerController
-
-    private static let fill = Theme.adaptive(dark: NSColor(white: 1, alpha: 0.62), light: NSColor(white: 0, alpha: 0.40))
-    private static let track = Theme.adaptive(dark: NSColor(white: 1, alpha: 0.14), light: NSColor(white: 0, alpha: 0.10))
+    var fill: Color
+    var height: CGFloat = 3
 
     var body: some View {
         PlaybackTimeline(clock: player.clock) { _ in
             ProgressBarLayer(
                 fraction: player.progressFraction(),
                 rate: player.progressRate,
-                fill: Self.fill,
-                track: Self.track
+                fill: fill,
+                track: Color.white.opacity(0.18)
             )
         }
-        .frame(height: 3)
+        .frame(height: height)
         .allowsHitTesting(false)
-    }
-}
-
-/// The cover. Clicking it brings the app that's playing to the front; on hover the top
-/// buttons and the "…" menu appear along its bottom edge, over a soft veil.
-private struct CompactCover: View {
-    @ObservedObject var player: PlayerController
-    @ObservedObject var settings: Settings
-    @ObservedObject var panel: PanelModel
-    let showControls: Bool
-    @State private var hovering = false
-
-    var body: some View {
-        let shape = RoundedRectangle(cornerRadius: Theme.compactArtRadius, style: .continuous)
-        ZStack(alignment: .bottom) {
-            Button {
-                if let kind = player.state?.source { player.open(kind) }
-            } label: {
-                CrossfadingArtwork(player: player)
-                    .overlay(Color.black.opacity(hovering ? 0.12 : 0))
-                    .contentShape(shape)
-            }
-            .buttonStyle(CoverPressStyle())
-            .help(player.state.map { "Open \($0.source.displayName)" } ?? "")
-            .onHover { hovering = $0 }
-
-            if showControls {
-                LinearGradient(
-                    stops: [
-                        .init(color: .black.opacity(0), location: 0),
-                        .init(color: .black.opacity(0.5), location: 1),
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-                .frame(height: 40)
-                .allowsHitTesting(false)
-                .transition(.opacity)
-
-                HStack(spacing: 0) {
-                    ToolbarIcons(
-                        player: player,
-                        settings: settings,
-                        panel: panel,
-                        iconSize: 12,
-                        cell: 22,
-                        tint: Color.white.opacity(0.92),
-                        includesOutput: false
-                    )
-                    Button(action: panel.actions.showMenu) {
-                        Image(systemName: "ellipsis")
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(Color.white.opacity(0.92))
-                            .frame(width: 22, height: 22)
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(PressableStyle())
-                    .help("More Options")
-                }
-                .shadow(color: .black.opacity(0.3), radius: 3, y: 1)
-                .padding(.bottom, 3)
-                // Over the cover's dark veil: white in both appearances.
-                .environment(\.colorScheme, .dark)
-                .transition(.opacity.combined(with: .offset(y: 4)))
-            }
-        }
-        .clipShape(shape)
-        .overlay(shape.strokeBorder(Theme.coverStroke, lineWidth: 0.5).allowsHitTesting(false))
-        .shadow(color: Theme.coverShadow, radius: 8, y: 3)
-        .animation(Theme.fade, value: hovering)
-        .animation(Theme.fade, value: showControls)
-    }
-}
-
-/// A press that dims the cover a little without shrinking it (it's too big to bounce).
-private struct CoverPressStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .opacity(configuration.isPressed ? 0.85 : 1)
-            .animation(Theme.press, value: configuration.isPressed)
     }
 }

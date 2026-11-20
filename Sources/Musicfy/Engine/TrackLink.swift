@@ -19,14 +19,20 @@ enum TrackLink {
             components.queryItems = [
                 URLQueryItem(name: "term", value: term),
                 URLQueryItem(name: "entity", value: "song"),
-                URLQueryItem(name: "limit", value: "1"),
+                URLQueryItem(name: "limit", value: "5"),
+                Catalog.countryItem,
             ]
             guard let url = components.url,
                   let (data, _) = try? await URLSession.shared.data(from: url),
                   let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                  let first = (json["results"] as? [[String: Any]])?.first,
-                  let link = first["trackViewUrl"] as? String
+                  let results = json["results"] as? [[String: Any]]
             else { return nil }
+            // The first result can be another version, or another artist's song by the
+            // same name: only one that is this song.
+            let match = results.first {
+                Catalog.same($0["trackName"] as? String, state.title) && Catalog.same($0["artistName"] as? String, state.artist)
+            } ?? results.first { Catalog.same($0["artistName"] as? String, state.artist) && !state.artist.isEmpty }
+            guard let link = match?["trackViewUrl"] as? String else { return nil }
             return URL(string: link)
         }
     }
@@ -39,6 +45,7 @@ enum TrackLink {
                 URLQueryItem(name: "media", value: "podcast"),
                 URLQueryItem(name: "entity", value: entity),
                 URLQueryItem(name: "limit", value: "10"),
+                Catalog.countryItem,
             ]
             guard let url = components.url,
                   let (data, _) = try? await URLSession.shared.data(from: url),
@@ -56,5 +63,27 @@ enum TrackLink {
               let link = first["collectionViewUrl"] as? String
         else { return nil }
         return URL(string: link)
+    }
+}
+
+/// Apple's public catalog (the iTunes search): which store to ask, and whether a result
+/// is the song that was asked for.
+enum Catalog {
+    /// The Mac's region. Without it the search answers from the US store, whose links and
+    /// versions aren't always the ones this Mac's Music has.
+    static var country: String { Locale.current.region?.identifier ?? "US" }
+    static var countryItem: URLQueryItem { URLQueryItem(name: "country", value: country) }
+
+    /// The same name, give or take case, accents, punctuation and a suffix
+    /// ("Heroes" and "Heroes - 2017 Remaster"; "Beyoncé" and "beyonce").
+    static func same(_ found: String?, _ wanted: String) -> Bool {
+        let a = fold(found ?? ""), b = fold(wanted)
+        guard !a.isEmpty, !b.isEmpty else { return false }
+        return a == b || a.hasPrefix(b) || b.hasPrefix(a)
+    }
+
+    private static func fold(_ text: String) -> String {
+        let plain = text.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: nil)
+        return String(plain.unicodeScalars.filter { CharacterSet.alphanumerics.contains($0) })
     }
 }

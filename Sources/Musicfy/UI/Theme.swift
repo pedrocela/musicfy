@@ -21,10 +21,12 @@ enum Theme {
     /// it turns into artwork once the pull passes `compactShrinkToArtwork`.
     static let compactWidthRange: ClosedRange<CGFloat> = 320...416
     static let compactShrinkToArtwork: CGFloat = 90
-    /// Compact's cover fills the height, 16 pt from every edge it touches.
+    /// Compact's cover runs flush down the left edge, the full height; the window's own
+    /// corners round it on the outside. The text column beside it keeps 16 pt of air.
     static let compactInset: CGFloat = 16
+    static var compactCoverSide: CGFloat { compactSize.height }
     static var compactArtSide: CGFloat { compactSize.height - compactInset * 2 }
-    static let compactArtRadius: CGFloat = 5
+    static let compactArtRadius: CGFloat = 0
     static let islandCollapsed = CGSize(width: 300, height: 44)
     /// The closed Island with lyrics on: as wide as the open Island and a bit taller, so the
     /// current line reads large with a peek of the one before and the one after.
@@ -33,21 +35,27 @@ enum Theme {
     static let islandLyricsMaxWidth: CGFloat = 720
     /// A short line shrinks it down to this.
     static let islandLyricsMinWidth: CGFloat = 220
-    /// Around the line: the cover (as wide as the pill is tall), the gap after it and the
-    /// right margin.
-    static var islandLyricsChrome: CGFloat { islandLyrics.height + 14 + 16 }
+    /// Around the line: the left and right margins (the cover is the pill's background).
+    static var islandLyricsChrome: CGFloat { islandTextInset + 16 }
     static let islandLyricRow: CGFloat = 19
     /// The open Island is compact on hover at its widest: same layout, 416 × 136.
     static let islandExpanded = CGSize(width: compactWidthRange.upperBound, height: compactSize.height)
-    /// One corner radius for every mode, the soft corner of an album cover (as Music
-    /// rounds artwork), so artwork, compact and the Island read as one family: covers.
-    static let cornerRadius: CGFloat = 6
+    /// One corner for every mode, generous and soft: artwork and compact round at 28 pt,
+    /// and anything shorter than 56 pt (the closed Island) becomes a full pill.
+    static let cornerRadius: CGFloat = 28
+    /// The corner for a shape of this size: `cornerRadius`, or half its short side if smaller.
+    static func radius(for size: CGSize) -> CGFloat {
+        min(cornerRadius, min(size.width, size.height) / 2)
+    }
+    /// Text over the cover starts this far from the pill's left edge.
+    static let islandTextInset: CGFloat = 18
     /// Artwork thumbnails (compact, open Island, empty cover): the same cover corner, scaled down.
     static let thumbRadius: CGFloat = 4
     /// Thumbnail in the closed Island, 6 pt from the edge.
-    static let islandThumb: CGFloat = 32
-    static let islandThumbInset: CGFloat = 6
-    static let islandThumbRadius: CGFloat = 3
+    // The closed Island's cover is flush too: the pill's full height, at its left edge.
+    static var islandThumb: CGFloat { islandCollapsed.height }
+    static let islandThumbInset: CGFloat = 0
+    static let islandThumbRadius: CGFloat = 0
     /// The Island window leaves room for the shadow all around the open pill, more below
     /// (the shadow falls a little) and less above. The top margin reaches up behind the gap
     /// under the menu bar, so the pill stays where it was. Keep the shadow's blur + offset

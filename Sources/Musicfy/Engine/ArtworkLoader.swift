@@ -49,12 +49,18 @@ final class ArtworkLoader {
         components.queryItems = [
             URLQueryItem(name: "term", value: term),
             URLQueryItem(name: "entity", value: album.isEmpty ? "song" : "album"),
-            URLQueryItem(name: "limit", value: "1"),
+            URLQueryItem(name: "limit", value: "5"),
+            Catalog.countryItem,
         ]
         guard let url = components.url,
               let (data, _) = try? await session.data(from: url),
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let first = (json["results"] as? [[String: Any]])?.first,
+              let results = json["results"] as? [[String: Any]],
+              // Another artist's cover is worse than none: with an artist to go by, only
+              // theirs, or the album by its name (a compilation is "Various Artists").
+              let first = artist.isEmpty ? results.first : results.first(where: {
+                  Catalog.same($0["artistName"] as? String, artist) || Catalog.same($0["collectionName"] as? String, album)
+              }),
               let small = first["artworkUrl100"] as? String
         else { return nil }
         // Thumbnails don't need the 600 px version.
@@ -72,6 +78,7 @@ final class ArtworkLoader {
             URLQueryItem(name: "media", value: "podcast"),
             URLQueryItem(name: "entity", value: "podcast"),
             URLQueryItem(name: "limit", value: "1"),
+            Catalog.countryItem,
         ]
         guard let url = components.url,
               let (data, _) = try? await session.data(from: url),

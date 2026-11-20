@@ -614,10 +614,13 @@ struct LyricsPanel: View {
                 ProgressView().controlSize(.small).tint(Theme.primary)
             } else if let lyrics = player.lyrics, lyrics.isSynced {
                 PlaybackTimeline(clock: player.clock) { now in
-                    SyncedLyrics(lines: lyrics.lines, current: lyrics.index(at: player.position(at: now) + 0.3))
-                        .equatable()
+                    SyncedLyrics(
+                        lines: lyrics.lines,
+                        current: lyrics.index(at: player.position(at: now) + 0.3),
+                        onSeek: { player.seek(toSeconds: $0) }
+                    )
+                    .equatable()
                 }
-                .allowsHitTesting(false)
             } else if let lyrics = player.lyrics, lyrics.instrumental {
                 PanelMessage(title: "Instrumental", detail: "This song has no lyrics.")
             } else if let lyrics = player.lyrics, !lyrics.plain.isEmpty {
@@ -660,21 +663,25 @@ struct PanelMessage: View {
 private struct SyncedLyrics: View, Equatable {
     let lines: [Lyrics.Line]
     let current: Int?
+    /// A click on a line takes the song there.
+    var onSeek: (Double) -> Void = { _ in }
+
+    static func == (a: SyncedLyrics, b: SyncedLyrics) -> Bool {
+        a.lines == b.lines && a.current == b.current
+    }
 
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 12) {
                     ForEach(lines.indices, id: \.self) { index in
-                        let isCurrent = index == current
-                        Text(lines[index].text.isEmpty ? "♪" : lines[index].text)
-                            .font(Theme.lyric)
-                            .foregroundStyle(Theme.primary.opacity(isCurrent ? 1 : 0.32))
-                            .blur(radius: isCurrent ? 0 : 0.6)
-                            .scaleEffect(isCurrent ? 1 : 0.97, anchor: .leading)
-                            .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
-                            .id(index)
-                            .animation(Theme.smooth, value: isCurrent)
+                        let time = lines[index].time
+                        LyricRow(
+                            text: lines[index].text.isEmpty ? "♪" : lines[index].text,
+                            isCurrent: index == current,
+                            action: { onSeek(time) }
+                        )
+                        .id(index)
                     }
                 }
                 .padding(.horizontal, 20)
@@ -697,6 +704,31 @@ private struct SyncedLyrics: View, Equatable {
                 withAnimation(.smooth(duration: 0.6)) { proxy.scrollTo(value ?? 0, anchor: .center) }
             }
         }
+    }
+}
+
+/// One line of the synced lyrics: it brightens under the mouse, and a click jumps to it.
+private struct LyricRow: View {
+    let text: String
+    let isCurrent: Bool
+    let action: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            Text(text)
+                .font(Theme.lyric)
+                .foregroundStyle(Theme.primary.opacity(isCurrent ? 1 : hovering ? 0.7 : 0.32))
+                .blur(radius: isCurrent || hovering ? 0 : 0.6)
+                .scaleEffect(isCurrent ? 1 : 0.97, anchor: .leading)
+                .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .help("Jump to This Line")
+        .animation(Theme.smooth, value: isCurrent)
+        .animation(Theme.fade, value: hovering)
     }
 }
 
@@ -782,10 +814,9 @@ struct EmptyStateView: View {
     private var compact: some View {
         HStack(spacing: 14) {
             EmptyCover(sources: player.installedSources)
-                .frame(width: Theme.compactArtSide, height: Theme.compactArtSide)
-                .clipShape(RoundedRectangle(cornerRadius: Theme.compactArtRadius, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: Theme.compactArtRadius, style: .continuous).strokeBorder(Theme.coverStroke, lineWidth: 0.5))
-                .shadow(color: Theme.coverShadow, radius: 8, y: 4)
+                .frame(width: Theme.compactCoverSide, height: Theme.compactCoverSide)
+                .clipped()
+                .shadow(color: .black.opacity(0.25), radius: 8, x: 4)
             VStack(alignment: .leading, spacing: 0) {
                 Text("Nothing Playing")
                     .font(Theme.compactTitle)
@@ -812,7 +843,7 @@ struct EmptyStateView: View {
             }
             Spacer(minLength: 0)
         }
-        .padding(.horizontal, Theme.compactInset)
+        .padding(.trailing, Theme.compactInset)
     }
 
     /// Same frame as the open Island while playing: thumbnail and text up top, then one
