@@ -42,7 +42,7 @@ struct IslandView: View {
                         CrossfadingArtwork(player: player)
                             // With lyrics there's no picture, only its colors: the cover
                             // far out of focus, enlarged so the soft edge stays outside the pill.
-                            .saturation(playing ? (lyricsMode ? 1.25 : 1) : 0.3)
+                            .saturation(playing ? (lyricsMode ? 1.4 : 1) : 0.3)
                             .brightness(playing ? 0 : -0.12)
                             .blur(radius: lyricsMode ? Theme.islandLyricsBlur : 0, opaque: false)
                             .scaleEffect(lyricsMode ? 1.5 : 1)
@@ -50,8 +50,8 @@ struct IslandView: View {
                         // With lyrics the line is centered, so the veil is even end to end.
                         LinearGradient(
                             stops: lyricsMode ? [
-                                .init(color: .black.opacity(0.5), location: 0),
-                                .init(color: .black.opacity(0.5), location: 1),
+                                .init(color: .black.opacity(0.38), location: 0),
+                                .init(color: .black.opacity(0.38), location: 1),
                             ] : [
                                 .init(color: .black.opacity(0.86), location: 0),
                                 .init(color: .black.opacity(0.55), location: 0.6),
