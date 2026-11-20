@@ -198,11 +198,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             .receive(on: RunLoop.main)
             .sink { [weak self] drawer in
                 guard let self else { return }
-                self.player.lyricsVisible = drawer == .lyrics
+                // The Island has no drawer: its lyrics follow the remembered switch.
+                if self.panelModel.mode != .island {
+                    self.player.lyricsVisible = drawer == .lyrics
+                }
                 self.player.queueVisible = drawer == .queue
                 if self.panelModel.mode != .island, !self.transitioning {
                     self.animateFrame(to: self.framedRect(for: self.panelModel.mode))
                 }
+            }
+            .store(in: &cancellables)
+
+        // Entering the Island (also at launch): lyrics as they were left there.
+        panelModel.$mode
+            .removeDuplicates()
+            .receive(on: RunLoop.main)
+            .sink { [weak self] mode in
+                guard let self, mode == .island else { return }
+                self.player.lyricsVisible = self.settings.islandLyrics
             }
             .store(in: &cancellables)
 

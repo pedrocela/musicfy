@@ -331,6 +331,7 @@ struct ToolbarIcons: View {
                 icon(lyricsActive ? "quote.bubble.fill" : "quote.bubble", "Lyrics", active: lyricsActive) {
                     if panel.mode == .island {
                         player.lyricsVisible.toggle()
+                        settings.islandLyrics = player.lyricsVisible
                     } else {
                         panel.drawer = panel.drawer == .lyrics ? .none : .lyrics
                     }

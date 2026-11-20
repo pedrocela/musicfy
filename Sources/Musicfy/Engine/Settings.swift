@@ -31,6 +31,8 @@ final class Settings: ObservableObject {
     @Published var showLyricsButton: Bool { didSet { defaults.set(showLyricsButton, forKey: "showLyricsButton") } }
     @Published var showQueueButton: Bool { didSet { defaults.set(showQueueButton, forKey: "showQueueButton") } }
     @Published var idleBehavior: IdleBehavior { didSet { defaults.set(idleBehavior.rawValue, forKey: "idleBehavior") } }
+    /// Lyrics on in the Island. Remembered, so the Island comes back with them on.
+    @Published var islandLyrics: Bool { didSet { defaults.set(islandLyrics, forKey: "islandLyrics") } }
     /// Off by default: a full-screen video or app has the screen to itself.
     @Published var showOverFullScreen: Bool { didSet { defaults.set(showOverFullScreen, forKey: "showOverFullScreen") } }
 
@@ -54,5 +56,6 @@ final class Settings: ObservableObject {
         let storedIdle = defaults.string(forKey: "idleBehavior")
         idleBehavior = storedIdle == "compact" ? .fade : IdleBehavior(rawValue: storedIdle ?? "") ?? .fade
         showOverFullScreen = defaults.bool(forKey: "showOverFullScreen")
+        islandLyrics = defaults.bool(forKey: "islandLyrics")
     }
 }
