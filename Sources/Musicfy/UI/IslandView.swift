@@ -12,9 +12,6 @@ struct IslandView: View {
 
     /// The text and ring fade in once the pill is in place (after the morph from the panel).
     @State private var settled = false
-    /// With lyrics on, a new song shows its title and artist for a moment before the
-    /// lines take over: otherwise nothing says what started playing.
-    @State private var announcing = false
 
     @Environment(\.colorScheme) private var scheme
     private var expanded: Bool { panel.islandExpanded }
@@ -39,17 +36,21 @@ struct IslandView: View {
                 LinearGradient(colors: [Theme.sheen, .clear], startPoint: .top, endPoint: .center)
                     .allowsHitTesting(false)
                 // Closed, the cover is the pill: its middle band from edge to edge, under a
-                // veil that darkens toward the left, where the text sits.
+                // veil: darker toward the left, where the title sits; even with lyrics.
                 if !expanded, player.state != nil {
                     ZStack {
                         CrossfadingArtwork(player: player)
                             .saturation(playing ? 1 : 0.3)
                             .brightness(playing ? 0 : -0.12)
+                        // With lyrics the line is centered, so the veil is even end to end.
                         LinearGradient(
-                            stops: [
+                            stops: lyricsMode ? [
+                                .init(color: .black.opacity(0.6), location: 0),
+                                .init(color: .black.opacity(0.6), location: 1),
+                            ] : [
                                 .init(color: .black.opacity(0.86), location: 0),
                                 .init(color: .black.opacity(0.55), location: 0.6),
-                                .init(color: .black.opacity(lyricsMode ? 0.3 : 0.08), location: 1),
+                                .init(color: .black.opacity(0.08), location: 1),
                             ],
                             startPoint: .leading,
                             endPoint: .trailing
@@ -132,35 +133,39 @@ struct IslandView: View {
         }
     }
 
-    /// Lyrics on: only the line being sung, large, rolling up as the song goes. The cover fills the left end; the progress is a hairline along the bottom.
+    /// Lyrics on: only the line being sung, large and centered. The cover fills the left end; the progress is a hairline along the bottom.
     private var lyricsRow: some View {
         HStack(spacing: 0) {
             Group {
-                if !announcing, let lyrics = player.lyrics, lyrics.isSynced {
+                if let lyrics = player.lyrics, lyrics.isSynced {
                     let beats = IslandLyricBeats.shared.beats(for: lyrics.lines)
                     PlaybackTimeline(clock: player.clock) { now in
                         IslandLyrics(
                             lines: beats,
-                            // A touch ahead of the song, so the line has settled by the time it's sung.
-                            current: IslandLyricBeats.index(in: beats, at: player.position(at: now) + 0.45) ?? -1,
+                            // Ahead of the song by about the crossfade, so the line is crisp by the time it's sung.
+                            current: IslandLyricBeats.index(in: beats, at: player.position(at: now) + 0.6) ?? -1,
                             dimmed: !playing,
+                            // Before the first line: the song's title and artist instead of
+                            // "♪", so the start says what's playing. Later breaks stay "♪".
+                            intro: announcement,
                             onLine: fitIsland
                         )
                         .equatable()
                     }
                 } else {
-                    // A new song, for a moment and while its lyrics load: its title and
-                    // artist, quietly, where the line goes.
+                    // While the lyrics load: the song's title and artist, quietly, where
+                    // the line goes.
                     Text(announcement)
                         .font(Theme.islandLyric)
                         .foregroundStyle(Theme.tertiary)
                         .lineLimit(1)
                         .minimumScaleFactor(0.7)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .task(id: announcement) { fitIsland(to: announcement) }
                 }
             }
-            .padding(.leading, Theme.islandTextInset)
-            .padding(.trailing, 16)
+            // Even on both sides, so the line sits in the middle of the pill.
+            .padding(.horizontal, Theme.islandLyricsChrome / 2)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .allowsHitTesting(false)
             .opacity(settled ? 1 : 0)
@@ -180,13 +185,6 @@ struct IslandView: View {
             .opacity(settled ? 1 : 0)
         }
         .frame(width: panel.islandLyricsWidth, height: Theme.islandLyrics.height)
-        .animation(Theme.fade, value: announcing)
-        .task(id: player.state?.trackKey) {
-            announcing = true
-            fitIsland(to: announcement)
-            try? await Task.sleep(for: .seconds(2.5))
-            if !Task.isCancelled { announcing = false }
-        }
         .onDisappear { fitIsland(to: nil) }
     }
 
@@ -367,67 +365,51 @@ final class IslandLyricBeats {
     }
 }
 
-/// The closed Island's karaoke: only the current line, large in the middle. When the line
-/// changes, the next one rises from below and grows into place while the old one rises,
-/// shrinks and fades away.
+/// The closed Island's karaoke: only the current line, large and centered. When the line
+/// changes, the new one crossfades in place and the pill resizes to fit it.
 private struct IslandLyrics: View, Equatable {
     let lines: [Lyrics.Line]
     /// -1 before the first line.
     let current: Int
     let dimmed: Bool
+    /// Shown before the first line instead of "♪": the song's title and artist.
+    let intro: String
     /// Told the line being sung each time it changes, so the pill can fit it.
     let onLine: @MainActor (String?) -> Void
 
     static func == (a: Self, b: Self) -> Bool {
-        a.current == b.current && a.dimmed == b.dimmed && a.lines == b.lines
+        a.current == b.current && a.dimmed == b.dimmed && a.intro == b.intro && a.lines == b.lines
     }
 
     var body: some View {
-        let row = Theme.islandLyricRow
-        let range = max(-1, current - 2)...min(lines.count - 1, current + 2)
-        ZStack(alignment: .leading) {
-            ForEach(Array(range), id: \.self) { index in
-                let distance = index - current
-                Text(text(at: index))
-                    .font(Theme.islandLyric)
-                    .foregroundStyle(Theme.primary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    // The line leaving fades fast as it starts to rise; the one arriving fades
-                    // in a beat later, once it's on its way, so the two never sit on top of
-                    // each other at half strength.
-                    .animation(distance == 0 ? Theme.lyricLineIn : Theme.lyricLineOut) {
-                        $0.opacity(distance == 0 ? (dimmed ? 0.6 : 1) : 0)
-                    }
-                    // Rising and settling: a small step in size and a soft focus, not a jump.
-                    .scaleEffect(distance == 0 ? 1 : 0.86, anchor: .leading)
-                    .blur(radius: distance == 0 ? 0 : 2.5)
-                    .offset(y: CGFloat(distance) * row)
-                    .transition(.opacity)
-            }
+        // Only the line being sung, centered. A new line crossfades in place while the
+        // pill grows or shrinks around it: nothing rolls up.
+        ZStack {
+            Text(text(at: current))
+                .font(Theme.islandLyric)
+                .foregroundStyle(Theme.primary)
+                .opacity(dimmed ? 0.6 : 1)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: .infinity, alignment: .center)
+                .id(current)
+                // The old line leaves as the pill starts to move; the new one arrives once
+                // the width has nearly settled, so no text is seen cut by the edge.
+                .transition(.asymmetric(
+                    insertion: .opacity.animation(Theme.lyricLineIn),
+                    removal: .opacity.animation(Theme.lyricLineOut)
+                ))
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-        .animation(Theme.lyricLineMove, value: current)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         // What's shown, "♪" included: an instrumental break gets the narrowest pill, not the
         // default width.
-        .task(id: current) { onLine(text(at: current)) }
+        .task(id: "\(current)|\(intro)") { onLine(text(at: current)) }
         .animation(Theme.fade, value: dimmed)
-        .mask(
-            LinearGradient(
-                stops: [
-                    .init(color: .clear, location: 0),
-                    .init(color: .black, location: 0.14),
-                    .init(color: .black, location: 0.86),
-                    .init(color: .clear, location: 1),
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-        )
     }
 
     private func text(at index: Int) -> String {
+        if index < 0, !intro.isEmpty { return intro }
         guard index >= 0, index < lines.count else { return "♪" }
         let text = lines[index].text
         return text.isEmpty ? "♪" : text
