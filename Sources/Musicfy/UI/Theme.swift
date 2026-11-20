@@ -31,6 +31,8 @@ enum Theme {
     static let islandLyrics = CGSize(width: islandExpanded.width, height: 54)
     /// A long line widens the lyrics Island up to this, then shrinks to fit.
     static let islandLyricsMaxWidth: CGFloat = 720
+    /// A short line shrinks it down to this.
+    static let islandLyricsMinWidth: CGFloat = 220
     /// Around the line: the cover (as wide as the pill is tall), the gap after it and the
     /// right margin.
     static var islandLyricsChrome: CGFloat { islandLyrics.height + 14 + 16 }

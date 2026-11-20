@@ -111,10 +111,11 @@ struct IslandView: View {
                 .opacity(playing ? 1 : 0.8)
             Group {
                 if let lyrics = player.lyrics, lyrics.isSynced {
+                    let beats = IslandLyricBeats.shared.beats(for: lyrics.lines)
                     PlaybackTimeline(clock: player.clock) { now in
                         IslandLyrics(
-                            lines: lyrics.lines,
-                            current: lyrics.index(at: player.position(at: now) + 0.3) ?? -1,
+                            lines: beats,
+                            current: IslandLyricBeats.index(in: beats, at: player.position(at: now) + 0.3) ?? -1,
                             dimmed: !playing,
                             onLine: fitIsland
                         )
@@ -160,9 +161,9 @@ struct IslandView: View {
     private func fitIsland(to line: String?) {
         var width = Theme.islandLyrics.width
         if let line, !line.isEmpty {
-            let font = NSFont.systemFont(ofSize: Theme.islandLyricSize, weight: .bold)
-            let text = (line as NSString).size(withAttributes: [.font: font]).width
-            width = min(Theme.islandLyricsMaxWidth, max(width, ceil(text) + Theme.islandLyricsChrome + 2))
+            // The pill hugs the line: no dead space after a short one.
+            let text = IslandLyricBeats.width(of: line)
+            width = min(Theme.islandLyricsMaxWidth, max(Theme.islandLyricsMinWidth, ceil(text) + Theme.islandLyricsChrome + 2))
         }
         if panel.islandLyricsWidth != width { panel.islandLyricsWidth = width }
     }
@@ -238,6 +239,70 @@ struct IslandView: View {
     /// Clicking the cover brings the app that's playing to the front, as in compact.
     private func thumbnail(side: CGFloat, radius: CGFloat) -> some View {
         IslandCover(player: player, side: side, radius: radius)
+    }
+}
+
+/// The lyric lines as the closed Island shows them: a line too long for the widest pill
+/// plays in two beats. It splits at the punctuation nearest its middle (a comma usually
+/// separates the beats well), else at the space nearest the middle, and the second half
+/// comes in after its share of the line's time, rolling up like a new line.
+@MainActor
+final class IslandLyricBeats {
+    static let shared = IslandLyricBeats()
+    private var source: [Lyrics.Line] = []
+    private var result: [Lyrics.Line] = []
+
+    private static let font = NSFont.systemFont(ofSize: Theme.islandLyricSize, weight: .bold)
+    private static var room: CGFloat { Theme.islandLyricsMaxWidth - Theme.islandLyricsChrome - 2 }
+
+    static func width(of text: String) -> CGFloat {
+        (text as NSString).size(withAttributes: [.font: font]).width
+    }
+
+    func beats(for lines: [Lyrics.Line]) -> [Lyrics.Line] {
+        if lines == source { return result }
+        source = lines
+        result = []
+        for (i, line) in lines.enumerated() {
+            guard Self.width(of: line.text) > Self.room, let (first, second) = Self.split(line.text) else {
+                result.append(line)
+                continue
+            }
+            let end = i + 1 < lines.count ? lines[i + 1].time : line.time + 6
+            let share = Double(first.count) / Double(max(1, first.count + second.count))
+            result.append(Lyrics.Line(time: line.time, text: first))
+            result.append(Lyrics.Line(time: line.time + (end - line.time) * share, text: second))
+        }
+        return result
+    }
+
+    static func index(in lines: [Lyrics.Line], at position: Double) -> Int? {
+        var low = 0, high = lines.count - 1, found: Int?
+        while low <= high {
+            let mid = (low + high) / 2
+            if lines[mid].time <= position { found = mid; low = mid + 1 } else { high = mid - 1 }
+        }
+        return found
+    }
+
+    /// Where to cut: punctuation nearest the middle whose halves both fit, else the
+    /// space nearest the middle.
+    private static func split(_ text: String) -> (String, String)? {
+        let chars = Array(text)
+        let middle = chars.count / 2
+        func halves(at cut: Int) -> (String, String)? {
+            let a = String(chars[..<cut]).trimmingCharacters(in: .whitespaces)
+            let b = String(chars[cut...]).trimmingCharacters(in: .whitespaces)
+            return a.isEmpty || b.isEmpty ? nil : (a, b)
+        }
+        let punctuation: Set<Character> = [",", ";", ":", "—", "–", "?", "!", ")"]
+        let marks = chars.indices.filter { punctuation.contains(chars[$0]) && $0 + 1 < chars.count }
+        for mark in marks.sorted(by: { abs($0 - middle) < abs($1 - middle) }) {
+            if let (a, b) = halves(at: mark + 1), width(of: a) <= room, width(of: b) <= room { return (a, b) }
+        }
+        let spaces = chars.indices.filter { chars[$0] == " " }
+        guard let space = spaces.min(by: { abs($0 - middle) < abs($1 - middle) }) else { return nil }
+        return halves(at: space)
     }
 }
 
