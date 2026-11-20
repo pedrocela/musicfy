@@ -513,7 +513,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     // Island: top center of the screen with the menu bar.
     private var islandWindowSize: CGSize {
         CGSize(
-            width: Theme.islandExpanded.width + Theme.islandShadowSide * 2,
+            // Room for the lyrics Island at its widest; the rest is transparent and lets clicks through.
+            width: max(Theme.islandExpanded.width, Theme.islandLyricsMaxWidth) + Theme.islandShadowSide * 2,
             height: Theme.islandShadowTop + Theme.islandExpanded.height + Theme.islandShadowBottom
         )
     }
@@ -547,7 +548,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     /// Where the pill sits inside an Island window frame, in screen coordinates.
     private func islandPillRect(inWindow frame: NSRect, expanded: Bool) -> NSRect {
-        let size = expanded ? Theme.islandExpanded : (player.showsIslandLyrics ? Theme.islandLyrics : Theme.islandCollapsed)
+        let size = expanded ? Theme.islandExpanded : (player.showsIslandLyrics
+            ? CGSize(width: panelModel.islandLyricsWidth, height: Theme.islandLyrics.height)
+            : Theme.islandCollapsed)
         let x = frame.minX + islandPillOffset(width: size.width, alignment: panelModel.islandAlignment)
         return NSRect(x: x, y: frame.maxY - Theme.islandShadowTop - size.height, width: size.width, height: size.height)
     }

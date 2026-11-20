@@ -19,7 +19,9 @@ struct IslandView: View {
 
     var body: some View {
         let lyricsMode = player.showsIslandLyrics
-        let size = expanded ? Theme.islandExpanded : (lyricsMode ? Theme.islandLyrics : Theme.islandCollapsed)
+        let size = expanded ? Theme.islandExpanded : (lyricsMode
+            ? CGSize(width: panel.islandLyricsWidth, height: Theme.islandLyrics.height)
+            : Theme.islandCollapsed)
         let shape = RoundedRectangle(cornerRadius: Theme.cornerRadius, style: .continuous)
         VStack(alignment: panel.islandAlignment.horizontal, spacing: 0) {
             ZStack(alignment: .top) {
@@ -64,6 +66,7 @@ struct IslandView: View {
             .scaleEffect(1 + 0.04 * panel.islandPull, anchor: .top)
             .animation(Theme.islandSpring, value: expanded)
             .animation(Theme.islandSpring, value: lyricsMode)
+            .animation(Theme.islandSpring, value: panel.islandLyricsWidth)
             Spacer(minLength: 0)
         }
         .padding(.horizontal, Theme.islandShadowSide)
@@ -112,7 +115,8 @@ struct IslandView: View {
                         IslandLyrics(
                             lines: lyrics.lines,
                             current: lyrics.index(at: player.position(at: now) + 0.3) ?? -1,
-                            dimmed: !playing
+                            dimmed: !playing,
+                            onLine: fitIsland
                         )
                         .equatable()
                     }
@@ -147,7 +151,20 @@ struct IslandView: View {
             .allowsHitTesting(false)
             .opacity(settled ? 1 : 0)
         }
-        .frame(width: Theme.islandLyrics.width, height: Theme.islandLyrics.height)
+        .frame(width: panel.islandLyricsWidth, height: Theme.islandLyrics.height)
+        .onDisappear { fitIsland(to: nil) }
+    }
+
+    /// Widens the lyrics Island when the line being sung doesn't fit, and narrows it back
+    /// to the usual width when it does. Past the widest, the line shrinks to fit.
+    private func fitIsland(to line: String?) {
+        var width = Theme.islandLyrics.width
+        if let line, !line.isEmpty {
+            let font = NSFont.systemFont(ofSize: Theme.islandLyricSize, weight: .bold)
+            let text = (line as NSString).size(withAttributes: [.font: font]).width
+            width = min(Theme.islandLyricsMaxWidth, max(width, ceil(text) + Theme.islandLyricsChrome + 2))
+        }
+        if panel.islandLyricsWidth != width { panel.islandLyricsWidth = width }
     }
 
     private var playingRow: some View {
@@ -232,6 +249,8 @@ private struct IslandLyrics: View, Equatable {
     /// -1 before the first line.
     let current: Int
     let dimmed: Bool
+    /// Told the line being sung each time it changes, so the pill can fit it.
+    let onLine: @MainActor (String?) -> Void
 
     static func == (a: Self, b: Self) -> Bool {
         a.current == b.current && a.dimmed == b.dimmed && a.lines == b.lines
@@ -258,6 +277,7 @@ private struct IslandLyrics: View, Equatable {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
         .animation(.spring(response: 0.5, dampingFraction: 0.9), value: current)
+        .task(id: current) { onLine(current >= 0 && current < lines.count ? lines[current].text : nil) }
         .animation(Theme.fade, value: dimmed)
         .mask(
             LinearGradient(

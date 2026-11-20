@@ -9,6 +9,8 @@ final class PanelModel: ObservableObject {
     @Published var isHovering = false
     @Published var volumeOpen = false
     @Published var islandExpanded = false
+    /// The closed Island's width with lyrics on: wider when the line being sung needs it.
+    @Published var islandLyricsWidth: CGFloat = Theme.islandLyrics.width
     /// Panel that opens below the player (artwork and compact), as in Music.
     @Published var drawer: Drawer = .none
     /// Where the Island sticks along the top edge.
