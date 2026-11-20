@@ -328,7 +328,7 @@ final class PlayerController: ObservableObject {
     }
 
     private func loadLyrics(for state: PlayerState) {
-        let key = state.trackKey
+        let key = state.lyricsKey
         guard key != lyricsKey else { return }
         lyricsKey = key
         guard state.source.hasLyrics else {
