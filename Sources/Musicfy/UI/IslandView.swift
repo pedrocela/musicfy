@@ -98,7 +98,7 @@ struct IslandView: View {
         }
     }
 
-    /// Lyrics on: only the line being sung, large, rolling up as the song goes. The cover fills the left end; the ring sits at the right.
+    /// Lyrics on: only the line being sung, large, rolling up as the song goes. The cover fills the left end; the progress is a hairline along the bottom.
     private var lyricsRow: some View {
         HStack(spacing: 14) {
             // The cover fills the pill's height, flush with its edge: the pill's own corners
@@ -126,15 +126,27 @@ struct IslandView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
+            .padding(.trailing, 16)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .allowsHitTesting(false)
             .opacity(settled ? 1 : 0)
-
-            ProgressRing(player: player, playing: playing, accent: accent)
-                .opacity(settled ? 1 : 0)
-                .scaleEffect(settled ? 1 : 0.6)
         }
-        .padding(.trailing, 15)
+        // The song's progress: a hairline along the bottom edge, beside the cover, so the
+        // line gets the whole width.
+        .overlay(alignment: .bottom) {
+            PlaybackTimeline(clock: player.clock) { _ in
+                ProgressBarLayer(
+                    fraction: player.progressFraction(),
+                    rate: player.progressRate,
+                    fill: playing ? accent : Theme.quaternary,
+                    track: Theme.ink.opacity(0.1)
+                )
+            }
+            .frame(height: 2)
+            .padding(.leading, Theme.islandLyrics.height)
+            .allowsHitTesting(false)
+            .opacity(settled ? 1 : 0)
+        }
         .frame(width: Theme.islandLyrics.width, height: Theme.islandLyrics.height)
     }
 
