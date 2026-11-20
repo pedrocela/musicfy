@@ -37,7 +37,6 @@ enum Theme {
     static let islandLyricsMinWidth: CGFloat = 220
     /// Around the line: the left and right margins (the cover is the pill's background).
     static var islandLyricsChrome: CGFloat { islandTextInset + 16 }
-    static let islandLyricRow: CGFloat = 19
     /// The open Island is compact on hover at its widest: same layout, 416 × 136.
     static let islandExpanded = CGSize(width: compactWidthRange.upperBound, height: compactSize.height)
     /// One corner for every mode, generous and soft: artwork and compact round at 28 pt,
@@ -201,15 +200,15 @@ enum Theme {
     static let islandCloseDelay: TimeInterval = 0.2
     /// Opening and closing the Island, and going in and out of lyrics: quicker than the mode
     /// changes, settling without a bounce.
-    static let islandSpring = Animation.spring(response: 0.38, dampingFraction: 0.9)
+    static let islandSpring = Animation.spring(response: 0.5, dampingFraction: 1)
     /// The Island's content fades in once the shape is most of the way there, so it never
     /// shows squeezed into a size it doesn't fit.
-    static let islandContentIn = Animation.easeOut(duration: 0.22).delay(0.1)
-    /// The Island's karaoke: the lines (and the pill's width) move on one soft spring; the
-    /// line leaving fades quickly, the one arriving a beat later.
-    static let lyricLineMove = Animation.spring(response: 0.42, dampingFraction: 0.9)
-    static let lyricLineOut = Animation.easeOut(duration: 0.14)
-    static let lyricLineIn = Animation.easeOut(duration: 0.2).delay(0.03)
+    static let islandContentIn = Animation.easeOut(duration: 0.3).delay(0.12)
+    /// The Island's karaoke: the pill's width moves on one soft spring with no bounce; the
+    /// line leaving fades as it starts, the one arriving overlaps it and is crisp by ~0.45 s.
+    static let lyricLineMove = Animation.spring(response: 0.5, dampingFraction: 1)
+    static let lyricLineOut = Animation.easeInOut(duration: 0.28)
+    static let lyricLineIn = Animation.easeInOut(duration: 0.36).delay(0.08)
     /// How long the controls stay after the mouse leaves.
     static let hoverExitDelay: TimeInterval = 0.3
     /// Paused this long, the player fades to `pausedAlpha` (full again on hover).
