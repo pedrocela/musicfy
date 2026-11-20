@@ -37,6 +37,19 @@ struct ArtworkModeView: View {
                     .transition(.opacity)
                 }
                 WindowDragArea(onDoubleClick: panel.actions.toggleArtworkCompact)
+                // Paused and at rest: a small glyph in the corner says so right away (the
+                // fade to half opacity only comes after a while).
+                if !showControls, density != .mini, player.state?.isPlaying == false {
+                    Image(systemName: "pause.fill")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(Color.white)
+                        .frame(width: 26, height: 26)
+                        .background(Circle().fill(Color.black.opacity(0.5)))
+                        .padding(10)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                        .allowsHitTesting(false)
+                        .transition(.opacity)
+                }
                 if showControls {
                     Group {
                         if density == .mini {
@@ -59,6 +72,7 @@ struct ArtworkModeView: View {
             .onChange(of: side) { _, value in updateDensity(for: value, animated: true) }
         }
         .animation(Theme.fade, value: showControls)
+        .animation(Theme.fade, value: player.state?.isPlaying)
     }
 
     private func updateDensity(for side: CGFloat, animated: Bool) {

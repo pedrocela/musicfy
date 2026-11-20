@@ -447,6 +447,11 @@ final class PlayerController: ObservableObject {
         refreshSoon(0.6)
     }
 
+    func seek(toSeconds seconds: Double) {
+        guard let duration = state?.duration, duration > 0 else { return }
+        seek(toFraction: seconds / duration)
+    }
+
     /// The slider sends dozens of values a second. The first one goes out right away, then
     /// at most one every 50 ms (always ending on the last value), and the state is read
     /// back only once the slider settles.
