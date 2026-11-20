@@ -271,10 +271,14 @@ final class IslandLyricBeats {
                 result.append(line)
                 continue
             }
-            let end = i + 1 < lines.count ? lines[i + 1].time : line.time + 6
+            // The time to the next line often includes a pause after this one is sung: spread
+            // the halves over about how long the words take (~0.11 s a character), not the
+            // whole gap, or the second half comes in late.
+            let gap = (i + 1 < lines.count ? lines[i + 1].time : line.time + 6) - line.time
+            let sung = min(gap, Double(line.text.count) * 0.11 + 0.3)
             let share = Double(first.count) / Double(max(1, first.count + second.count))
             result.append(Lyrics.Line(time: line.time, text: first))
-            result.append(Lyrics.Line(time: line.time + (end - line.time) * share, text: second))
+            result.append(Lyrics.Line(time: line.time + sung * share, text: second))
         }
         return result
     }
