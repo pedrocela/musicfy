@@ -252,7 +252,7 @@ final class IslandLyricBeats {
     private var source: [Lyrics.Line] = []
     private var result: [Lyrics.Line] = []
 
-    private static let font = NSFont.systemFont(ofSize: Theme.islandLyricSize, weight: .bold)
+    private static let font = NSFont.systemFont(ofSize: Theme.islandLyricSize, weight: .medium)
     private static var room: CGFloat { Theme.islandLyricsMaxWidth - Theme.islandLyricsChrome - 2 }
     /// Lines wider than this (about half the screen's worth of pill) read better in two beats,
     /// even when they'd fit in the widest pill.
