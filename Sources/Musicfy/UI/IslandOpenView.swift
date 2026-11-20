@@ -4,7 +4,7 @@ import SwiftUI
 /// Island's full height, and its colors bleed into the rest of it, so every album paints
 /// it differently.
 /// Beside it: title and artist with Lyrics and "…" at the top right; play in a solid circle
-/// with previous and next beside it and the time at the right; a scrubbable bar at the bottom
+/// between previous and next and the time at the right; a scrubbable bar at the bottom
 /// (the volume takes its place while open).
 struct IslandOpenView: View {
     @ObservedObject var player: PlayerController
@@ -97,13 +97,13 @@ struct IslandOpenView: View {
         }
     }
 
-    /// Play first, in a solid circle you can't miss; previous and next beside it; the time
-    /// at the right.
+    /// Previous, play in a solid circle you can't miss, and next; the time at the right.
     private var transport: some View {
         let state = player.state
         let kind = state?.source ?? .music
         let playing = state?.isPlaying ?? false
-        return HStack(spacing: 10) {
+        return HStack(spacing: 6) {
+            IconButton(symbol: kind.previousSymbol, size: 15, tint: Theme.primary.opacity(0.85), help: kind.previousHelp, action: { player.previous() })
             Button(action: { player.playPause() }) {
                 Image(systemName: playing ? "pause.fill" : "play.fill")
                     .font(.system(size: 15, weight: .bold))
@@ -116,8 +116,6 @@ struct IslandOpenView: View {
             }
             .buttonStyle(PressableStyle())
             .help("Play/Pause")
-            .padding(.trailing, 2)
-            IconButton(symbol: kind.previousSymbol, size: 15, tint: Theme.primary.opacity(0.85), help: kind.previousHelp, action: { player.previous() })
             IconButton(symbol: kind.nextSymbol, size: 15, tint: Theme.primary.opacity(0.85), help: kind.nextHelp, action: { player.next() })
             Spacer(minLength: 0)
             PlaybackTimeline(clock: player.clock) { now in
@@ -126,6 +124,7 @@ struct IslandOpenView: View {
                     .foregroundStyle(Theme.timeColor)
             }
         }
+        .padding(.leading, -9) // previous's own air reaches the column's edge
     }
 
     private var bar: some View {
