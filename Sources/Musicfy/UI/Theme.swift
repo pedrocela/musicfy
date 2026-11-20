@@ -191,10 +191,17 @@ enum Theme {
     /// The Island opens after the pointer rests this long, and closes this long after it leaves.
     static let islandOpenDelay: TimeInterval = 0.06
     static let islandCloseDelay: TimeInterval = 0.2
-    /// Opening and closing the Island: quicker than the mode changes.
-    static let islandSpring = Animation.spring(response: 0.3, dampingFraction: 0.84)
-    /// The Island's content fades in just behind the shape.
-    static let islandContentIn = Animation.easeOut(duration: 0.16).delay(0.04)
+    /// Opening and closing the Island, and going in and out of lyrics: quicker than the mode
+    /// changes, settling without a bounce.
+    static let islandSpring = Animation.spring(response: 0.38, dampingFraction: 0.9)
+    /// The Island's content fades in once the shape is most of the way there, so it never
+    /// shows squeezed into a size it doesn't fit.
+    static let islandContentIn = Animation.easeOut(duration: 0.22).delay(0.1)
+    /// The Island's karaoke: the lines (and the pill's width) move on one soft spring; the
+    /// line leaving fades quickly, the one arriving a beat later.
+    static let lyricLineMove = Animation.spring(response: 0.55, dampingFraction: 0.92)
+    static let lyricLineOut = Animation.easeOut(duration: 0.18)
+    static let lyricLineIn = Animation.easeOut(duration: 0.32).delay(0.08)
     /// How long the controls stay after the mouse leaves.
     static let hoverExitDelay: TimeInterval = 0.3
     /// Paused this long, the player fades to `pausedAlpha` (full again on hover).

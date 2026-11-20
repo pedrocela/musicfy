@@ -66,7 +66,8 @@ struct IslandView: View {
             .scaleEffect(1 + 0.04 * panel.islandPull, anchor: .top)
             .animation(Theme.islandSpring, value: expanded)
             .animation(Theme.islandSpring, value: lyricsMode)
-            .animation(Theme.islandSpring, value: panel.islandLyricsWidth)
+            // The pill follows the line with the line's own spring, so width and text move as one.
+            .animation(Theme.lyricLineMove, value: panel.islandLyricsWidth)
             Spacer(minLength: 0)
         }
         .padding(.horizontal, Theme.islandShadowSide)
@@ -347,15 +348,21 @@ private struct IslandLyrics: View, Equatable {
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .scaleEffect(distance == 0 ? 1 : 0.58, anchor: .leading)
-                    .opacity(distance == 0 ? (dimmed ? 0.6 : 1) : 0)
-                    .blur(radius: distance == 0 ? 0 : 0.4)
+                    // The line leaving fades fast as it starts to rise; the one arriving fades
+                    // in a beat later, once it's on its way, so the two never sit on top of
+                    // each other at half strength.
+                    .animation(distance == 0 ? Theme.lyricLineIn : Theme.lyricLineOut) {
+                        $0.opacity(distance == 0 ? (dimmed ? 0.6 : 1) : 0)
+                    }
+                    // Rising and settling: a small step in size and a soft focus, not a jump.
+                    .scaleEffect(distance == 0 ? 1 : 0.86, anchor: .leading)
+                    .blur(radius: distance == 0 ? 0 : 2.5)
                     .offset(y: CGFloat(distance) * row)
                     .transition(.opacity)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-        .animation(.spring(response: 0.5, dampingFraction: 0.9), value: current)
+        .animation(Theme.lyricLineMove, value: current)
         // What's shown, "♪" included: an instrumental break gets the narrowest pill, not the
         // default width.
         .task(id: current) { onLine(text(at: current)) }
