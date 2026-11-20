@@ -351,7 +351,9 @@ private struct IslandLyrics: View, Equatable {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
         .animation(.spring(response: 0.5, dampingFraction: 0.9), value: current)
-        .task(id: current) { onLine(current >= 0 && current < lines.count ? lines[current].text : nil) }
+        // What's shown, "♪" included: an instrumental break gets the narrowest pill, not the
+        // default width.
+        .task(id: current) { onLine(text(at: current)) }
         .animation(Theme.fade, value: dimmed)
         .mask(
             LinearGradient(
