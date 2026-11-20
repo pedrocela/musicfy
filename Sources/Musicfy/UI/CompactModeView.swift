@@ -61,7 +61,8 @@ struct CompactModeView: View {
     private var title: some View {
         ZStack(alignment: .leading) {
             VStack(alignment: .leading, spacing: 2) {
-                MarqueeText(text: player.state?.title ?? "", font: Theme.compactTitle, color: Theme.primary, height: 19)
+                // At rest a long title stays still, cut off with the fade; it scrolls on hover.
+                MarqueeText(text: player.state?.title ?? "", font: Theme.compactTitle, color: Theme.primary, height: 19, scrolls: showControls)
                 // In the Island, the Lyrics button swaps the subtitle for the line being sung.
                 SubtitleLine(player: player, font: Theme.compactSubtitle, height: 16, showsLyric: inIsland)
             }
