@@ -57,6 +57,13 @@ final class PlayerController: ObservableObject {
         }
     }
 
+    /// The closed Island shows only the lyrics, large, karaoke style: lyrics are on and the
+    /// song has synced lines (or they're still loading, so a new song doesn't make the pill
+    /// shrink and grow back). Without synced lyrics it stays the usual pill.
+    var showsIslandLyrics: Bool {
+        lyricsVisible && state != nil && (lyricsLoading || lyrics?.isSynced == true)
+    }
+
     let settings: Settings
 
     private let podcasts = PodcastsSource()

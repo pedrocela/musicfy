@@ -26,6 +26,10 @@ enum Theme {
     static var compactArtSide: CGFloat { compactSize.height - compactInset * 2 }
     static let compactArtRadius: CGFloat = 5
     static let islandCollapsed = CGSize(width: 300, height: 44)
+    /// The closed Island with lyrics on: as wide as the open Island and a bit taller, so the
+    /// current line reads large with a peek of the one before and the one after.
+    static let islandLyrics = CGSize(width: islandExpanded.width, height: 68)
+    static let islandLyricRow: CGFloat = 25
     /// The open Island is compact on hover at its widest: same layout, 416 × 136.
     static let islandExpanded = CGSize(width: compactWidthRange.upperBound, height: compactSize.height)
     /// One corner radius for every mode, the soft corner of an album cover (as Music
@@ -66,6 +70,7 @@ enum Theme {
     static let compactSubtitle = Font.system(size: 12)
     static let islandTitle = Font.system(size: 13, weight: .semibold)
     static let islandSubtitle = Font.system(size: 11)
+    static let islandLyric = Font.system(size: 18, weight: .bold)
     static let islandOpenTitle = Font.system(size: 15, weight: .semibold)
     static let lyric = Font.system(size: 21, weight: .bold)
 

@@ -18,7 +18,8 @@ struct IslandView: View {
     private var playing: Bool { player.state?.isPlaying ?? false }
 
     var body: some View {
-        let size = expanded ? Theme.islandExpanded : Theme.islandCollapsed
+        let lyricsMode = player.showsIslandLyrics
+        let size = expanded ? Theme.islandExpanded : (lyricsMode ? Theme.islandLyrics : Theme.islandCollapsed)
         let shape = RoundedRectangle(cornerRadius: Theme.cornerRadius, style: .continuous)
         VStack(alignment: panel.islandAlignment.horizontal, spacing: 0) {
             ZStack(alignment: .top) {
@@ -62,6 +63,7 @@ struct IslandView: View {
             // in light mode it read as a hard edge. Kept small so the shadow fits the margins.
             .scaleEffect(1 + 0.04 * panel.islandPull, anchor: .top)
             .animation(Theme.islandSpring, value: expanded)
+            .animation(Theme.islandSpring, value: lyricsMode)
             Spacer(minLength: 0)
         }
         .padding(.horizontal, Theme.islandShadowSide)
@@ -87,9 +89,53 @@ struct IslandView: View {
                 .padding(.leading, Theme.islandThumbInset)
                 .padding(.trailing, 12)
                 .frame(width: Theme.islandCollapsed.width, height: Theme.islandCollapsed.height)
+        } else if player.showsIslandLyrics {
+            lyricsRow
+                .transition(.opacity.animation(Theme.islandContentIn))
         } else {
             playingRow
+                .transition(.opacity.animation(Theme.islandContentIn))
         }
+    }
+
+    /// Lyrics on: only the lyrics, large, rolling up as the song goes, with a peek of the
+    /// line that left and the one coming. The cover and the ring stay at the ends.
+    private var lyricsRow: some View {
+        HStack(spacing: 12) {
+            thumbnail(side: Theme.islandThumb, radius: Theme.islandThumbRadius)
+                .saturation(playing ? 1 : 0.35)
+                .opacity(playing ? 1 : 0.8)
+            Group {
+                if let lyrics = player.lyrics, lyrics.isSynced {
+                    PlaybackTimeline(clock: player.clock) { now in
+                        IslandLyrics(
+                            lines: lyrics.lines,
+                            current: lyrics.index(at: player.position(at: now) + 0.3) ?? -1,
+                            dimmed: !playing
+                        )
+                        .equatable()
+                    }
+                } else {
+                    // A new song while its lyrics load: its title, quietly, where the line goes.
+                    Text(player.state?.title ?? "")
+                        .font(Theme.islandLyric)
+                        .foregroundStyle(Theme.tertiary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .allowsHitTesting(false)
+            .opacity(settled ? 1 : 0)
+
+            ProgressRing(player: player, playing: playing, accent: accent)
+                .opacity(settled ? 1 : 0)
+                .scaleEffect(settled ? 1 : 0.6)
+        }
+        .padding(.leading, Theme.islandThumbInset + 4)
+        .padding(.trailing, 15)
+        .frame(width: Theme.islandLyrics.width, height: Theme.islandLyrics.height)
     }
 
     private var playingRow: some View {
@@ -163,6 +209,62 @@ struct IslandView: View {
     /// Clicking the cover brings the app that's playing to the front, as in compact.
     private func thumbnail(side: CGFloat, radius: CGFloat) -> some View {
         IslandCover(player: player, side: side, radius: radius)
+    }
+}
+
+/// The closed Island's karaoke: the current line large in the middle, the one before and
+/// the one after smaller and faded above and below, cut by the pill's edges. When the line
+/// changes they all roll up together.
+private struct IslandLyrics: View, Equatable {
+    let lines: [Lyrics.Line]
+    /// -1 before the first line.
+    let current: Int
+    let dimmed: Bool
+
+    static func == (a: Self, b: Self) -> Bool {
+        a.current == b.current && a.dimmed == b.dimmed && a.lines == b.lines
+    }
+
+    var body: some View {
+        let row = Theme.islandLyricRow
+        let range = max(-1, current - 2)...min(lines.count - 1, current + 2)
+        ZStack(alignment: .leading) {
+            ForEach(Array(range), id: \.self) { index in
+                let distance = index - current
+                Text(text(at: index))
+                    .font(Theme.islandLyric)
+                    .foregroundStyle(Theme.primary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .scaleEffect(distance == 0 ? 1 : 0.8, anchor: .leading)
+                    .opacity(distance == 0 ? (dimmed ? 0.6 : 1) : abs(distance) == 1 ? 0.45 : 0)
+                    .blur(radius: distance == 0 ? 0 : 0.4)
+                    .offset(y: CGFloat(distance) * row)
+                    .transition(.opacity)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+        .animation(.spring(response: 0.5, dampingFraction: 0.9), value: current)
+        .animation(Theme.fade, value: dimmed)
+        .mask(
+            LinearGradient(
+                stops: [
+                    .init(color: .clear, location: 0),
+                    .init(color: .black, location: 0.24),
+                    .init(color: .black, location: 0.76),
+                    .init(color: .clear, location: 1),
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+        )
+    }
+
+    private func text(at index: Int) -> String {
+        guard index >= 0, index < lines.count else { return "♪" }
+        let text = lines[index].text
+        return text.isEmpty ? "♪" : text
     }
 }
 
