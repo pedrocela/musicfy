@@ -36,17 +36,22 @@ struct IslandView: View {
                 LinearGradient(colors: [Theme.sheen, .clear], startPoint: .top, endPoint: .center)
                     .allowsHitTesting(false)
                 // Closed, the cover is the pill: its middle band from edge to edge, under a
-                // veil: darker toward the left, where the title sits; even with lyrics.
+                // veil: darker toward the left, where the title sits. With lyrics, a blur of its colors.
                 if !expanded, player.state != nil {
                     ZStack {
                         CrossfadingArtwork(player: player)
-                            .saturation(playing ? 1 : 0.3)
+                            // With lyrics there's no picture, only its colors: the cover
+                            // far out of focus, enlarged so the soft edge stays outside the pill.
+                            .saturation(playing ? (lyricsMode ? 1.25 : 1) : 0.3)
                             .brightness(playing ? 0 : -0.12)
+                            .blur(radius: lyricsMode ? Theme.islandLyricsBlur : 0, opaque: false)
+                            .scaleEffect(lyricsMode ? 1.5 : 1)
+                            .animation(Theme.islandSpring, value: lyricsMode)
                         // With lyrics the line is centered, so the veil is even end to end.
                         LinearGradient(
                             stops: lyricsMode ? [
-                                .init(color: .black.opacity(0.6), location: 0),
-                                .init(color: .black.opacity(0.6), location: 1),
+                                .init(color: .black.opacity(0.5), location: 0),
+                                .init(color: .black.opacity(0.5), location: 1),
                             ] : [
                                 .init(color: .black.opacity(0.86), location: 0),
                                 .init(color: .black.opacity(0.55), location: 0.6),
@@ -133,7 +138,7 @@ struct IslandView: View {
         }
     }
 
-    /// Lyrics on: only the line being sung, large and centered. The cover fills the left end; the progress is a hairline along the bottom.
+    /// Lyrics on: only the line being sung, large and centered over the cover's blurred colors; the progress is a hairline along the bottom.
     private var lyricsRow: some View {
         HStack(spacing: 0) {
             Group {
