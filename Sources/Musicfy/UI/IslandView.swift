@@ -16,8 +16,11 @@ struct IslandView: View {
     /// lines take over: otherwise nothing says what started playing.
     @State private var announcing = false
 
+    @Environment(\.colorScheme) private var scheme
     private var expanded: Bool { panel.islandExpanded }
     private var accent: Color { Color(nsColor: player.palette.tint) }
+    /// The accent over the cover's dark veil: the bright one in both appearances.
+    private var coverAccent: Color { Color(nsColor: player.palette.accent) }
     private var playing: Bool { player.state?.isPlaying ?? false }
 
     var body: some View {
@@ -25,7 +28,8 @@ struct IslandView: View {
         let size = expanded ? Theme.islandExpanded : (lyricsMode
             ? CGSize(width: panel.islandLyricsWidth, height: Theme.islandLyrics.height)
             : Theme.islandCollapsed)
-        let shape = RoundedRectangle(cornerRadius: Theme.cornerRadius, style: .continuous)
+        // Closed it's a full pill; open, the same soft corner as compact.
+        let shape = RoundedRectangle(cornerRadius: Theme.radius(for: size), style: .continuous)
         VStack(alignment: panel.islandAlignment.horizontal, spacing: 0) {
             ZStack(alignment: .top) {
                 // Tinted with the artwork's color, like compact.
@@ -34,6 +38,27 @@ struct IslandView: View {
                     .animation(Theme.crossfade, value: player.palette)
                 LinearGradient(colors: [Theme.sheen, .clear], startPoint: .top, endPoint: .center)
                     .allowsHitTesting(false)
+                // Closed, the cover is the pill: its middle band from edge to edge, under a
+                // veil that darkens toward the left, where the text sits.
+                if !expanded, player.state != nil {
+                    ZStack {
+                        CrossfadingArtwork(player: player)
+                            .saturation(playing ? 1 : 0.3)
+                            .brightness(playing ? 0 : -0.12)
+                        LinearGradient(
+                            stops: [
+                                .init(color: .black.opacity(0.86), location: 0),
+                                .init(color: .black.opacity(0.55), location: 0.6),
+                                .init(color: .black.opacity(lyricsMode ? 0.3 : 0.08), location: 1),
+                            ],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    }
+                    .allowsHitTesting(false)
+                    .transition(.opacity.animation(Theme.fade))
+                    .animation(Theme.fade, value: playing)
+                }
                 IslandDragArea()
                 if expanded {
                     expandedContent
@@ -43,6 +68,8 @@ struct IslandView: View {
                         ))
                 } else {
                     collapsedContent
+                        // White over the cover in both appearances.
+                        .environment(\.colorScheme, player.state == nil ? scheme : .dark)
                         .transition(.asymmetric(
                             insertion: .opacity.animation(Theme.islandContentIn),
                             removal: .opacity.animation(.easeOut(duration: 0.08))
@@ -107,12 +134,7 @@ struct IslandView: View {
 
     /// Lyrics on: only the line being sung, large, rolling up as the song goes. The cover fills the left end; the progress is a hairline along the bottom.
     private var lyricsRow: some View {
-        HStack(spacing: 14) {
-            // The cover fills the pill's height, flush with its edge: the pill's own corners
-            // round it on the outside.
-            thumbnail(side: Theme.islandLyrics.height, radius: 0)
-                .saturation(playing ? 1 : 0.35)
-                .opacity(playing ? 1 : 0.8)
+        HStack(spacing: 0) {
             Group {
                 if !announcing, let lyrics = player.lyrics, lyrics.isSynced {
                     let beats = IslandLyricBeats.shared.beats(for: lyrics.lines)
@@ -137,24 +159,23 @@ struct IslandView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
+            .padding(.leading, Theme.islandTextInset)
             .padding(.trailing, 16)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .allowsHitTesting(false)
             .opacity(settled ? 1 : 0)
         }
-        // The song's progress: a hairline along the bottom edge, beside the cover, so the
-        // line gets the whole width.
+        // The song's progress: a hairline along the whole bottom edge.
         .overlay(alignment: .bottom) {
             PlaybackTimeline(clock: player.clock) { _ in
                 ProgressBarLayer(
                     fraction: player.progressFraction(),
                     rate: player.progressRate,
-                    fill: playing ? accent : Theme.quaternary,
-                    track: Theme.ink.opacity(0.1)
+                    fill: playing ? coverAccent : Theme.quaternary,
+                    track: Color.white.opacity(0.18)
                 )
             }
             .frame(height: 2)
-            .padding(.leading, Theme.islandLyrics.height)
             .allowsHitTesting(false)
             .opacity(settled ? 1 : 0)
         }
@@ -188,9 +209,6 @@ struct IslandView: View {
 
     private var playingRow: some View {
         HStack(spacing: 10) {
-            thumbnail(side: Theme.islandThumb, radius: Theme.islandThumbRadius)
-                .saturation(playing ? 1 : 0.35)
-                .opacity(playing ? 1 : 0.8)
             VStack(alignment: .leading, spacing: 0) {
                 if let state = player.state {
                     MarqueeText(
@@ -221,15 +239,26 @@ struct IslandView: View {
             .allowsHitTesting(false)
             .opacity(settled ? 1 : 0)
 
-            if player.state != nil {
-                ProgressRing(player: player, playing: playing, accent: accent)
+            if player.state != nil, !playing {
+                Image(systemName: "pause.fill")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(Color.white.opacity(0.9))
                     .opacity(settled ? 1 : 0)
-                    .scaleEffect(settled ? 1 : 0.6)
+                    .allowsHitTesting(false)
+                    .transition(.opacity)
             }
         }
-        .padding(.leading, Theme.islandThumbInset)
-        .padding(.trailing, 11)
+        .padding(.leading, Theme.islandTextInset)
+        .padding(.trailing, 16)
         .frame(width: Theme.islandCollapsed.width, height: Theme.islandCollapsed.height)
+        // The song's progress: a hairline along the whole bottom edge, as with lyrics.
+        .overlay(alignment: .bottom) {
+            if player.state != nil {
+                EdgeProgress(player: player, fill: playing ? coverAccent : Theme.quaternary, height: 2)
+                    .opacity(settled ? 1 : 0)
+            }
+        }
+        .animation(Theme.fade, value: playing)
     }
 
     private func islandSubtitle(_ state: PlayerState) -> String {

@@ -19,13 +19,23 @@ struct ArtworkModeView: View {
     /// The system's appearance, read before this view sets dark for its controls.
     @Environment(\.colorScheme) private var scheme
     private var light: Bool { scheme == .light }
+    private var paused: Bool { player.state?.isPlaying == false }
 
     var body: some View {
         GeometryReader { geo in
             let side = geo.size.width
             let metrics = ArtworkMetrics(side: side)
             ZStack {
+                // Paused: the cover loses its color, so it reads at a glance.
                 CrossfadingArtwork(player: player)
+                    .saturation(paused ? 0.3 : 1)
+                    .brightness(paused ? -0.12 : 0)
+                // At rest: the title and artist at the bottom left and a line of progress
+                // along the bottom edge.
+                if !showControls, density != .mini, let state = player.state {
+                    restInfo(state, metrics)
+                        .transition(.opacity)
+                }
                 if showControls {
                     Group {
                         if density == .mini {
@@ -44,8 +54,9 @@ struct ArtworkModeView: View {
                         .font(.system(size: 11, weight: .bold))
                         .foregroundStyle(Color.white)
                         .frame(width: 26, height: 26)
-                        .background(Circle().fill(Color.black.opacity(0.5)))
-                        .padding(10)
+                        .background(Circle().fill(Color.white.opacity(0.2)))
+                        .padding(.trailing, 14)
+                        .padding(.bottom, 16)
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
                         .allowsHitTesting(false)
                         .transition(.opacity)
@@ -73,6 +84,36 @@ struct ArtworkModeView: View {
         }
         .animation(Theme.fade, value: showControls)
         .animation(Theme.fade, value: player.state?.isPlaying)
+    }
+
+    private func restInfo(_ state: PlayerState, _ m: ArtworkMetrics) -> some View {
+        ZStack(alignment: .bottomLeading) {
+            LinearGradient(
+                stops: [
+                    .init(color: .black.opacity(0), location: 0.45),
+                    .init(color: .black.opacity(0.74), location: 1),
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            VStack(alignment: .leading, spacing: 2) {
+                Text(state.title)
+                    .font(.system(size: m.title, weight: .semibold))
+                    .foregroundStyle(Color.white)
+                    .lineLimit(1)
+                if !state.artist.isEmpty {
+                    Text(state.artist)
+                        .font(.system(size: m.artist))
+                        .foregroundStyle(Color.white.opacity(0.72))
+                        .lineLimit(1)
+                }
+            }
+            .padding(.leading, m.sideMargin + 4)
+            .padding(.trailing, 52)
+            .padding(.bottom, m.bottomMargin + 8)
+            EdgeProgress(player: player, fill: Color(nsColor: player.palette.accent))
+        }
+        .allowsHitTesting(false)
     }
 
     private func updateDensity(for side: CGFloat, animated: Bool) {

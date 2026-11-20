@@ -48,8 +48,9 @@ struct RootView: View {
     }
 
     private func framedContent(baseHeight: CGFloat) -> some View {
-        ZStack {
-            VisualEffectBackground(cornerRadius: Theme.cornerRadius)
+        let radius = min(Theme.cornerRadius, baseHeight / 2)
+        return ZStack {
+            VisualEffectBackground(cornerRadius: radius)
             VStack(spacing: 0) {
                 content
                     .frame(height: baseHeight)
@@ -66,9 +67,9 @@ struct RootView: View {
                     .padding(.bottom, 8)
             }
         }
-        .clipShape(RoundedRectangle(cornerRadius: Theme.cornerRadius, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: Theme.cornerRadius, style: .continuous)
+            RoundedRectangle(cornerRadius: radius, style: .continuous)
                 .strokeBorder(Theme.windowStroke, lineWidth: 0.5)
         )
         .animation(Theme.smooth, value: panel.mode)
@@ -134,9 +135,9 @@ struct RootView: View {
 }
 
 /// The window halfway between the panel and the Island. It fills the window, whose frame
-/// AppKit animates with the same curve; here the artwork travels from filling the panel
-/// (or from the compact thumbnail) to the Island's thumbnail, and the background darkens
-/// into the Island's. At 0 it looks like the panel, at 1 like the closed Island.
+/// AppKit animates with the same curve. The cover is the background at both ends, so it
+/// stays put while the corners and the veil change. At 0 it looks like the panel, at 1
+/// like the closed Island.
 struct MorphView: View, Animatable {
     @ObservedObject var player: PlayerController
     let look: MorphLook
@@ -151,43 +152,30 @@ struct MorphView: View, Animatable {
         GeometryReader { geo in
             let size = geo.size
             let p = max(0, min(1, progress))
-            let start: CGRect = look == .artwork
-                ? CGRect(origin: .zero, size: size)
-                : CGRect(x: 0, y: 0, width: Theme.compactCoverSide, height: Theme.compactCoverSide)
-            let end = CGRect(
-                x: Theme.islandThumbInset,
-                y: (size.height - Theme.islandThumb) / 2,
-                width: Theme.islandThumb,
-                height: Theme.islandThumb
-            )
-            let thumb = CGRect(
-                x: lerp(start.minX, end.minX, p),
-                y: lerp(start.minY, end.minY, p),
-                width: lerp(start.width, end.width, p),
-                height: lerp(start.height, end.height, p)
-            )
-            let startRadius: CGFloat = look == .artwork ? Theme.cornerRadius : Theme.compactArtRadius
-            ZStack(alignment: .topLeading) {
-                // The Island wears the same artwork tint as compact: from compact the
-                // background stays; from artwork it fades in as the cover shrinks.
-                Color(nsColor: player.palette.backdrop)
-                    .opacity(look == .compact ? 1 : Double(min(1, p * 1.6)))
+            let radius = Theme.radius(for: size)
+            ZStack {
+                // The cover fills the panel and the Island alike, so it just stays; the
+                // Island's veil, darker toward the left, fades in on the way.
+                Color(nsColor: player.palette.background)
                 ArtworkFill(image: player.artwork)
-                    .frame(width: thumb.width, height: thumb.height)
-                    .clipShape(RoundedRectangle(cornerRadius: lerp(startRadius, Theme.islandThumbRadius, p), style: .continuous))
-                    .offset(x: thumb.minX, y: thumb.minY)
+                LinearGradient(
+                    stops: [
+                        .init(color: .black.opacity(0.84), location: 0),
+                        .init(color: .black.opacity(0.5), location: 0.55),
+                        .init(color: .black.opacity(0.08), location: 1),
+                    ],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+                .opacity(look == .compact ? 1 : Double(p))
             }
-            .frame(width: size.width, height: size.height, alignment: .topLeading)
-            .clipShape(RoundedRectangle(cornerRadius: Theme.cornerRadius, style: .continuous))
+            .frame(width: size.width, height: size.height)
+            .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: Theme.cornerRadius, style: .continuous)
+                RoundedRectangle(cornerRadius: radius, style: .continuous)
                     .strokeBorder(Theme.windowStroke, lineWidth: 0.5)
             )
         }
         .allowsHitTesting(false)
-    }
-
-    private func lerp(_ a: CGFloat, _ b: CGFloat, _ t: CGFloat) -> CGFloat {
-        a + (b - a) * t
     }
 }
