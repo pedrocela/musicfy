@@ -34,7 +34,16 @@ struct QueuePanel: View {
                         .foregroundStyle(Theme.quaternary)
                         .lineLimit(1)
                 }
+                // Music only tells the list's own order, not what shuffle will pick.
+                if player.state?.shuffle == true {
+                    Text("Shuffle is on. The order may differ.")
+                        .font(.system(size: 12))
+                        .foregroundStyle(Theme.quaternary)
+                        .lineLimit(1)
+                        .transition(.opacity)
+                }
             }
+            .animation(Theme.fade, value: player.state?.shuffle)
             .padding(.horizontal, 16)
             .padding(.top, 14)
             .padding(.bottom, 10)

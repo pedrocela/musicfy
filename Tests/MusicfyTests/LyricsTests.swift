@@ -50,4 +50,25 @@ final class LyricsTests: XCTestCase {
         XCTAssertEqual(LyricsLoader.best(in: list, duration: 180)?.plain, "plain only")
         XCTAssertNil(LyricsLoader.best(in: [["duration": 400.0, "plainLyrics": "x"]], duration: 180))
     }
+
+    func testCleanTitleDropsWhatLRCLIBDoesNotKnow() {
+        XCTAssertEqual(LyricsLoader.cleanTitle("Heroes - 2017 Remaster"), "Heroes")
+        XCTAssertEqual(LyricsLoader.cleanTitle("Song (feat. Someone)"), "Song")
+        XCTAssertEqual(LyricsLoader.cleanTitle("Song [Live at Wembley]"), "Song")
+        XCTAssertEqual(LyricsLoader.cleanTitle("Song (Extended Mix) - Remastered 2011"), "Song")
+    }
+
+    func testCleanTitleKeepsOrdinaryTitles() {
+        XCTAssertEqual(LyricsLoader.cleanTitle("Song (Part Two)"), "Song (Part Two)")
+        XCTAssertEqual(LyricsLoader.cleanTitle("Up - Down"), "Up - Down")
+        XCTAssertEqual(LyricsLoader.cleanTitle("(Live)"), "(Live)")
+    }
+
+    func testCatalogMatchesNamesLoosely() {
+        XCTAssertTrue(Catalog.same("Beyoncé", "beyonce"))
+        XCTAssertTrue(Catalog.same("Heroes - 2017 Remaster", "Heroes"))
+        XCTAssertFalse(Catalog.same("Someone Else", "Artist"))
+        XCTAssertFalse(Catalog.same(nil, "Artist"))
+        XCTAssertFalse(Catalog.same("Artist", ""))
+    }
 }

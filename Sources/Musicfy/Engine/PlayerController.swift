@@ -98,6 +98,12 @@ final class PlayerController: ObservableObject {
     private var artworkKey: String?
     private var lyricsKey: String?
     private var queueKey: String?
+    /// How many times the current song's lyrics and artwork were asked for again after a
+    /// request that got nothing.
+    private var lyricsRetries: (key: String, count: Int) = ("", 0)
+    private var artworkRetries: (key: String, count: Int) = ("", 0)
+    private static let maxRetries = 3
+    private static let retryDelay: Double = 5
     private var pendingVolume: Int?
     private var volumeThrottled = false
     private var volumeRefresh: DispatchWorkItem?
@@ -324,6 +330,15 @@ final class PlayerController: ObservableObject {
             guard self.artworkKey == key else { return }
             if let image { ArtworkLoader.shared.store(image, for: key) }
             if image !== self.artwork { self.artworkAlbumKey = state.albumKey; self.artwork = image }
+            // Nothing came (a dropped connection, or Music hadn't loaded it yet): try again
+            // in a moment, a few times, while the same song is still on.
+            if image == nil, self.artworkRetries.key != key || self.artworkRetries.count < Self.maxRetries {
+                self.artworkRetries = (key, self.artworkRetries.key == key ? self.artworkRetries.count + 1 : 1)
+                try? await Task.sleep(for: .seconds(Self.retryDelay))
+                guard self.artworkKey == key, let current = self.state else { return }
+                self.artworkKey = nil
+                self.loadArtwork(for: current)
+            }
         }
     }
 
@@ -339,9 +354,22 @@ final class PlayerController: ObservableObject {
         lyrics = nil
         lyricsLoading = true
         Task {
-            let found = await LyricsLoader.shared.lyrics(for: state)
+            let result = await LyricsLoader.shared.lookup(for: state)
             guard self.lyricsKey == key else { return }
-            self.lyrics = found
+            if case .found(let found) = result { self.lyrics = found } else { self.lyrics = nil }
+            // A request that got no answer (no network, a timeout): ask again in a moment,
+            // a few times, rather than leave the song without lyrics until it ends.
+            if result == .failed, self.lyricsRetries.key != key || self.lyricsRetries.count < Self.maxRetries {
+                self.lyricsRetries = (key, self.lyricsRetries.key == key ? self.lyricsRetries.count + 1 : 1)
+                try? await Task.sleep(for: .seconds(Self.retryDelay))
+                guard self.lyricsKey == key, self.lyricsVisible, let current = self.state, current.lyricsKey == key else {
+                    if self.lyricsKey == key { self.lyricsKey = nil; self.lyricsLoading = false }
+                    return
+                }
+                self.lyricsKey = nil
+                self.loadLyrics(for: current)
+                return
+            }
             self.lyricsLoading = false
         }
     }
