@@ -145,6 +145,15 @@ enum Menus {
             sub.add("Volume", checked: settings.showVolume, icon: "speaker.wave.2") { settings.showVolume.toggle() }
             sub.add("Audio Output", checked: settings.showOutput, icon: "airplayaudio") { settings.showOutput.toggle() }
         }
+        // When LRCLIB's timing doesn't match this recording, or the audio goes out late
+        // (AirPlay, Bluetooth), the lyrics can be moved by a quarter second at a time.
+        menu.addSubmenu("Lyrics Timing", icon: "timer") { sub in
+            for advance in [1.0, 0.75, 0.5, 0.25, 0, -0.25, -0.5] {
+                let title = advance == 0 ? "On Time"
+                    : "\(Self.seconds(abs(advance))) \(advance > 0 ? "Earlier" : "Later")"
+                sub.add(title, checked: abs(settings.lyricsAdvance - advance) < 0.01) { settings.lyricsAdvance = advance }
+            }
+        }
         // The on/off settings live together in a submenu, with the usual checks, so the
         // main menu keeps one column of icons and its last group is only app commands.
         menu.addSubmenu("Settings", icon: "gearshape") { sub in
@@ -187,6 +196,12 @@ enum Menus {
 
     /// Audio output devices, with a check on the current one, and a way to the system settings.
     /// A volume slider row, lined up with the titles.
+    /// 0.25 → "0.25 s", 1 → "1 s".
+    static func seconds(_ value: Double) -> String {
+        let text = value == value.rounded() ? String(Int(value)) : String(format: "%g", value)
+        return "\(text) s"
+    }
+
     static func volumeItem(player: PlayerController) -> NSMenuItem {
         let item = NSMenuItem()
         let row = NSView(frame: NSRect(x: 0, y: 0, width: 264, height: 24))

@@ -74,6 +74,9 @@ final class PlayerController: ObservableObject {
     ]
     private var lastStates: [SourceKind: PlayerState] = [:]
     private var startedAt: [SourceKind: Date] = [:]
+    /// When each app's last answer arrived, taken on the AppleScript queue the moment it
+    /// came back (the position is the script's last read), not later on the main thread.
+    private var readAt: [SourceKind: Date] = [:]
     /// The last error number each app's read gave, so a hung app is logged once, not every read.
     private var lastFailure: [SourceKind: Int] = [:]
     private var timer: Timer?
@@ -183,12 +186,15 @@ final class PlayerController: ObservableObject {
         }
         AppleScriptRunner.shared.queue.async {
             var results: [SourceKind: Result<PlayerState?, AppleScriptRunner.Failure>] = [:]
+            var times: [SourceKind: Date] = [:]
             for (kind, source) in sources {
                 results[kind] = source.fetchState()
+                times[kind] = Date()
             }
             Task { @MainActor in
                 self.refreshing = false
                 if startedGeneration == self.generation {
+                    self.readAt.merge(times) { $1 }
                     self.apply(results)
                 } else {
                     self.refreshAgain = true
@@ -258,7 +264,9 @@ final class PlayerController: ObservableObject {
         }
         if chosen != state {
             state = chosen
-            positionDate = Date()
+            // The position is as of when the app answered: counting from now would put the
+            // song (and its lyrics) behind by the hop to the main thread and any wait there.
+            positionDate = chosen.flatMap { readAt[$0.source] }.map { min($0, Date()) } ?? Date()
         }
         guard let chosen else {
             if artwork != nil { artworkAlbumKey = nil; artwork = nil }
@@ -283,6 +291,12 @@ final class PlayerController: ObservableObject {
         let elapsed = state.isPlaying ? date.timeIntervalSince(positionDate) : 0
         let value = state.position + elapsed
         return state.duration > 0 ? min(value, state.duration) : value
+    }
+
+    /// Where the lyrics are: the position plus how far ahead the person wants them
+    /// (Lyrics Timing in the menu), plus `lead` for the view's own fade-in.
+    func lyricsPosition(at date: Date = Date(), lead: Double) -> Double {
+        position(at: date) + lead + settings.lyricsAdvance
     }
 
     /// The song's progress (0 to 1) right now.
