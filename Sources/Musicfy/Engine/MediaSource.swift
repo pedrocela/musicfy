@@ -111,10 +111,6 @@ final class MusicSource: MediaSource {
         \t\t\tset mfNm to current stream title
         \t\tend try
         \tend if
-        \tset mfPos to 0
-        \ttry
-        \t\tset mfPos to player position
-        \tend try
         \tset mfSr to song repeat
         \tset mfRp to "off"
         \tif mfSr is all then
@@ -122,7 +118,14 @@ final class MusicSource: MediaSource {
         \telse if mfSr is one then
         \t\tset mfRp to "one"
         \tend if
-        \treturn {mfSt, mfNm, mfAr, mfAl, mfDu, mfPos, mfTid, sound volume, shuffle enabled, mfRp, mfFav, ""}
+        \tset mfVol to sound volume
+        \tset mfSh to shuffle enabled
+        \t-- The position last, so it's as fresh as possible when the answer arrives.
+        \tset mfPos to 0
+        \ttry
+        \t\tset mfPos to player position
+        \tend try
+        \treturn {mfSt, mfNm, mfAr, mfAl, mfDu, mfPos, mfTid, mfVol, mfSh, mfRp, mfFav, ""}
         end tell
         """
     }()
@@ -255,13 +258,16 @@ final class SpotifySource: MediaSource {
         \t\tset mfTid to id of mfT
         \t\tset mfAw to artwork url of mfT
         \tend try
+        \tset mfRp to "off"
+        \tif repeating then set mfRp to "all"
+        \tset mfVol to sound volume
+        \tset mfSh to shuffling
+        \t-- The position last, so it's as fresh as possible when the answer arrives.
         \tset mfPos to 0
         \ttry
         \t\tset mfPos to player position
         \tend try
-        \tset mfRp to "off"
-        \tif repeating then set mfRp to "all"
-        \treturn {mfSt, mfNm, mfAr, mfAl, mfDu, mfPos, mfTid, sound volume, shuffling, mfRp, false, mfAw}
+        \treturn {mfSt, mfNm, mfAr, mfAl, mfDu, mfPos, mfTid, mfVol, mfSh, mfRp, false, mfAw}
         end tell
         """
 
