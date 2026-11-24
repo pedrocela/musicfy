@@ -56,6 +56,11 @@ final class LyricsTests: XCTestCase {
         XCTAssertEqual(LyricsLoader.cleanTitle("Song (feat. Someone)"), "Song")
         XCTAssertEqual(LyricsLoader.cleanTitle("Song [Live at Wembley]"), "Song")
         XCTAssertEqual(LyricsLoader.cleanTitle("Song (Extended Mix) - Remastered 2011"), "Song")
+        XCTAssertEqual(LyricsLoader.cleanTitle("Lago en el Cielo (Remasterizado 2026)"), "Lago en el Cielo")
+        XCTAssertEqual(LyricsLoader.cleanTitle("Crimen - En Vivo"), "Crimen")
+        XCTAssertEqual(LyricsLoader.cleanTitle("Zona de Promesas (Versión Acústica)"), "Zona de Promesas")
+        XCTAssertEqual(LyricsLoader.cleanTitle("Trem Bala (Ao Vivo)"), "Trem Bala")
+        XCTAssertEqual(LyricsLoader.cleanTitle("Song - Remasterizada 2008"), "Song")
     }
 
     func testCleanTitleKeepsOrdinaryTitles() {

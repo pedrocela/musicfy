@@ -122,9 +122,13 @@ final class LyricsLoader {
     }
 
     /// The title without what the apps add to it and LRCLIB usually doesn't have:
-    /// "Heroes - 2017 Remaster" → "Heroes", "Song (feat. Someone)" → "Song".
+    /// "Heroes - 2017 Remaster" → "Heroes", "Song (feat. Someone)" → "Song",
+    /// "Lago en el Cielo (Remasterizado 2026)" → "Lago en el Cielo".
     static func cleanTitle(_ title: String) -> String {
-        let words = "feat\\.?|ft\\.?|featuring|remaster(ed)?|version|edit|mix|live|mono|stereo|deluxe|bonus|single|acoustic|demo|anniversary|explicit"
+        // English plus the Spanish and Portuguese tags Spotify shows in those languages:
+        // "Lago en el Cielo (Remasterizado 2026)", "Canción - En Vivo", "Música (Ao Vivo)".
+        let words = "feat\\.?|ft\\.?|featuring|remaster(ed)?|version|edit|mix|remix|live|mono|stereo|deluxe|bonus|single|acoustic|demo|anniversary|explicit"
+            + "|remasteriza(do|da|ción|cion)|remasterizad[oa]s?|versión|versão|en vivo|en directo|ao vivo|edición|edicion|mezcla|acústic[oa]|acustic[oa]|sencillo|aniversario|expl[ií]cit[oa]"
         var clean = title
         for pattern in [
             "\\s*[\\(\\[][^\\)\\]]*\\b(\(words))\\b[^\\)\\]]*[\\)\\]]",
