@@ -92,9 +92,19 @@ final class LyricsLoader {
         lock.unlock()
 
         var failed = false
-        var result = await exact(state)
+        let exactMatch = await exact(state)
+        var result = exactMatch.lookup
         if case .failed = result { failed = true }
-        if case .found = result {} else {
+        if case .found = result {
+            // LRCLIB's exact match tolerates a couple of seconds, so it may be timed for
+            // another master of the song (a remaster with a longer intro): the lyrics then
+            // run early or late by the difference. A search result whose duration matches
+            // this recording more closely is the better timing.
+            if let gotten = exactMatch.duration, abs(gotten - state.duration) >= 0.5,
+               let closer = await closest(state), abs(closer.duration - state.duration) < abs(gotten - state.duration) - 0.25 {
+                result = .found(closer.lyrics)
+            }
+        } else {
             result = await search(state, title: state.title)
             if case .failed = result { failed = true }
         }
@@ -140,7 +150,23 @@ final class LyricsLoader {
         return clean.isEmpty ? title : clean
     }
 
-    private func exact(_ state: PlayerState) async -> Lookup {
+    /// The search result with synced lyrics whose duration is nearest this recording's.
+    private func closest(_ state: PlayerState) async -> (lyrics: Lyrics, duration: Double)? {
+        var components = URLComponents(string: "https://lrclib.net/api/search")!
+        components.queryItems = [
+            URLQueryItem(name: "track_name", value: state.title),
+            URLQueryItem(name: "artist_name", value: state.artist),
+        ]
+        guard let data = await get(components.url),
+              let list = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]],
+              let item = Self.ranked(list, duration: state.duration).first(where: Self.isSynced),
+              let duration = item["duration"] as? Double,
+              let lyrics = Self.lyrics(from: item)
+        else { return nil }
+        return (lyrics, duration)
+    }
+
+    private func exact(_ state: PlayerState) async -> (lookup: Lookup, duration: Double?) {
         var components = URLComponents(string: "https://lrclib.net/api/get")!
         components.queryItems = [
             URLQueryItem(name: "track_name", value: state.title),
@@ -148,11 +174,11 @@ final class LyricsLoader {
             URLQueryItem(name: "album_name", value: state.album),
             URLQueryItem(name: "duration", value: String(Int(state.duration.rounded()))),
         ]
-        guard let data = await get(components.url) else { return .failed }
+        guard let data = await get(components.url) else { return (.failed, nil) }
         guard !data.isEmpty, let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let found = Self.lyrics(from: json)
-        else { return .missing }
-        return .found(found)
+        else { return (.missing, nil) }
+        return (.found(found), json["duration"] as? Double)
     }
 
     /// Without an exact match, the first one with synced lyrics and a similar duration.
@@ -188,15 +214,29 @@ final class LyricsLoader {
         }
     }
 
-    /// From a search's results: the first with synced lyrics among those whose duration is
-    /// within 4 s of the song's, or else the first of those.
+    /// From a search's results: among those whose duration is within 4 s of the song's, the
+    /// synced one nearest in duration (the same master, so the same timing), or else the
+    /// nearest of any.
     static func best(in list: [[String: Any]], duration: Double) -> Lyrics? {
-        let close = list.filter { item in
-            guard duration > 0, let d = item["duration"] as? Double else { return true }
-            return abs(d - duration) < 4
-        }
-        let best = close.first { ($0["syncedLyrics"] as? String)?.isEmpty == false } ?? close.first
+        let close = ranked(list, duration: duration)
+        let best = close.first(where: isSynced) ?? close.first
         return best.flatMap(lyrics(from:))
+    }
+
+    /// Results within 4 s of `duration`, nearest first (stable: LRCLIB's order breaks ties).
+    static func ranked(_ list: [[String: Any]], duration: Double) -> [[String: Any]] {
+        guard duration > 0 else { return list }
+        func gap(_ item: [String: Any]) -> Double {
+            (item["duration"] as? Double).map { abs($0 - duration) } ?? 3.9
+        }
+        return list.enumerated()
+            .filter { gap($0.element) < 4 }
+            .sorted { (gap($0.element), $0.offset) < (gap($1.element), $1.offset) }
+            .map(\.element)
+    }
+
+    static func isSynced(_ item: [String: Any]) -> Bool {
+        (item["syncedLyrics"] as? String)?.isEmpty == false
     }
 
     static func lyrics(from json: [String: Any]) -> Lyrics? {

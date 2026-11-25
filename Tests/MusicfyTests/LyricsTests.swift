@@ -45,6 +45,16 @@ final class LyricsTests: XCTestCase {
         XCTAssertEqual(LyricsLoader.best(in: list, duration: 180)?.lines.first?.text, "right one")
     }
 
+    func testSearchPrefersTheNearestDuration() {
+        // The same song on several albums: the one timed for this recording wins.
+        let list: [[String: Any]] = [
+            ["duration": 206.0, "syncedLyrics": "[00:06.86]compilation"],
+            ["duration": 207.632, "syncedLyrics": "[00:08.18]this master"],
+            ["duration": 206.26, "syncedLyrics": "[00:06.71]another"],
+        ]
+        XCTAssertEqual(LyricsLoader.best(in: list, duration: 207.633)?.lines.first?.text, "this master")
+    }
+
     func testSearchFallsBackToPlain() {
         let list: [[String: Any]] = [["duration": 181.0, "plainLyrics": "plain only"]]
         XCTAssertEqual(LyricsLoader.best(in: list, duration: 180)?.plain, "plain only")
