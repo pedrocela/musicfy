@@ -227,7 +227,7 @@ struct TransportRow: View {
 
     @ObservedObject var player: PlayerController
     var size: Size = .large
-    /// The open Island only shows previous, play and next, centered.
+    /// Small artwork only shows previous, play and next, centered.
     var showsModes = true
     /// Artwork mode's measures, which replace `size`.
     var metrics: ArtworkMetrics? = nil
@@ -584,7 +584,7 @@ struct SubtitleLine: View {
     var body: some View {
         if showsLyric, player.lyricsVisible, let lyrics = player.lyrics, lyrics.isSynced {
             PlaybackTimeline(clock: player.clock) { now in
-                let index = lyrics.index(at: player.lyricsPosition(at: now, lead: 0.55))
+                let index = lyrics.index(at: player.lyricsPosition(at: now, lead: 0.3))
                 let line = index.map { lyrics.lines[$0].text } ?? ""
                 ZStack(alignment: .leading) {
                     MarqueeText(text: line.isEmpty ? "♪" : line, font: font, color: Theme.primary, height: height)
@@ -616,7 +616,7 @@ struct LyricsPanel: View {
                 PlaybackTimeline(clock: player.clock) { now in
                     SyncedLyrics(
                         lines: lyrics.lines,
-                        current: lyrics.index(at: player.lyricsPosition(at: now, lead: 0.55)),
+                        current: lyrics.index(at: player.lyricsPosition(at: now, lead: 0.3)),
                         onSeek: { player.seek(toSeconds: $0) }
                     )
                     .equatable()

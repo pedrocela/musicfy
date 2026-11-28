@@ -3,8 +3,8 @@ import SwiftUI
 /// The open Island (on hover), cover-led: the cover runs flush down the left edge, the
 /// Island's full height, and its colors bleed into the rest of it, so every album paints
 /// it differently.
-/// Beside it: title and artist with Lyrics and "…" at the top right; play in a solid circle
-/// between previous and next and the time at the right; a scrubbable bar at the bottom
+/// Beside it: title and artist with Lyrics and "…" at the top right; shuffle, previous, play
+/// in a solid circle, next and repeat, with the time at the right; a scrubbable bar at the bottom
 /// (the volume takes its place while open).
 struct IslandOpenView: View {
     @ObservedObject var player: PlayerController
@@ -97,12 +97,25 @@ struct IslandOpenView: View {
         }
     }
 
-    /// Previous, play in a solid circle you can't miss, and next; the time at the right.
+    /// Shuffle, previous, play in a solid circle you can't miss, next and repeat; the time
+    /// at the right. Podcasts has no shuffle or repeat, so it keeps the three in the middle.
     private var transport: some View {
         let state = player.state
         let kind = state?.source ?? .music
         let playing = state?.isPlaying ?? false
-        return HStack(spacing: 6) {
+        let modes = kind.hasPlayModes
+        let modeOff = Theme.primary.opacity(0.5)
+        return HStack(spacing: 4) {
+            if modes {
+                IconButton(
+                    symbol: "shuffle",
+                    size: 12,
+                    tint: state?.shuffle == true ? Theme.primary : modeOff,
+                    help: "Shuffle",
+                    active: state?.shuffle == true,
+                    action: { player.toggleShuffle() }
+                )
+            }
             IconButton(symbol: kind.previousSymbol, size: 15, tint: Theme.primary.opacity(0.85), help: kind.previousHelp, action: { player.previous() })
             Button(action: { player.playPause() }) {
                 Image(systemName: playing ? "pause.fill" : "play.fill")
@@ -117,6 +130,16 @@ struct IslandOpenView: View {
             .buttonStyle(PressableStyle())
             .help("Play/Pause")
             IconButton(symbol: kind.nextSymbol, size: 15, tint: Theme.primary.opacity(0.85), help: kind.nextHelp, action: { player.next() })
+            if modes {
+                IconButton(
+                    symbol: state?.repeatMode == .one ? "repeat.1" : "repeat",
+                    size: 12,
+                    tint: state.map { $0.repeatMode != .off } == true ? Theme.primary : modeOff,
+                    help: "Repeat",
+                    active: state.map { $0.repeatMode != .off } ?? false,
+                    action: { player.cycleRepeat() }
+                )
+            }
             Spacer(minLength: 0)
             PlaybackTimeline(clock: player.clock) { now in
                 Text("\(TimeText.format(player.position(at: now))) / \(TimeText.format(state?.duration ?? 0))")
@@ -124,7 +147,7 @@ struct IslandOpenView: View {
                     .foregroundStyle(Theme.timeColor)
             }
         }
-        .padding(.leading, -9) // previous's own air reaches the column's edge
+        .padding(.leading, -9) // the first button's own air reaches the column's edge
     }
 
     private var bar: some View {

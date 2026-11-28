@@ -156,8 +156,11 @@ struct IslandView: View {
                     PlaybackTimeline(clock: player.clock) { now in
                         IslandLyrics(
                             lines: beats,
-                            // Ahead of the song by about the crossfade and the pill resize, so the line is crisp by the time it's sung.
-                            current: IslandLyricBeats.index(in: beats, at: player.lyricsPosition(at: now, lead: 0.85)) ?? -1,
+                            // A new line takes about 0.25 s to read clearly (`Theme.lyricLineIn`), so
+                            // it switches half a second early: legible just before it's sung, not a
+                            // whole beat ahead. (0.85 s ran visibly early once the position was dated
+                            // when the app answered.)
+                            current: IslandLyricBeats.index(in: beats, at: player.lyricsPosition(at: now, lead: 0.5)) ?? -1,
                             dimmed: !playing,
                             // Before the first line: the song's title and artist instead of
                             // "♪", so the start says what's playing. Later breaks stay "♪".
